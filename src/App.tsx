@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import NotesPage from "./NotesPage";
 import PetalCanvas from "./PetalCanvas";
 
 const QUOTES = [
@@ -86,6 +87,7 @@ export default function PurpleDashboard() {
   const [progress,     setProgress]     = useState(0);
   const [saved,        setSaved]        = useState(false);
   const [activeTab,    setActiveTab]    = useState("home");
+  const [showNotes,    setShowNotes]    = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileRef  = useRef<HTMLInputElement>(null);
@@ -545,7 +547,9 @@ export default function PurpleDashboard() {
         style={{ background: "rgba(232,224,250,.90)", backdropFilter: "blur(24px)", borderTop: "1px solid rgba(255,255,255,.82)", boxShadow: "0 -4px 28px rgba(118,84,168,.08)" }}>
         {(["🤍","💬","🎀","⭐","🎵"] as const).map((icon, i) => {
           const id = ["home","chat","bow","star","music"][i];
+              if (id === "chat") { setShowNotes(true); return; }
           const active = activeTab === id;
+  if (showNotes) return <NotesPage onBack={() => setShowNotes(false)} />;
           return (
             <button key={id} onClick={() => setActiveTab(id)}
               className="bg-transparent border-none cursor-pointer transition-all duration-200"
