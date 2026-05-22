@@ -94,7 +94,7 @@ export default function PetalCanvas() {
     canvas.width = W; canvas.height = H;
 
     const COUNT = Math.min(38, Math.floor((W * H) / 14000));
-    let petals: Petal[] = Array.from({ length: COUNT }, () => newPetal(W, H));
+    const petals: Petal[] = Array.from({ length: COUNT }, () => newPetal(W, H));
     let t = 0, raf: number;
 
     const onResize = () => {

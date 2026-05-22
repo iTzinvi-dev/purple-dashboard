@@ -57,7 +57,7 @@ const BRUSH_SIZES = [2, 5, 10, 18];
 
 const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch {} },
+  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { void 0; } },
 };
 
 const newNote = (): Note => ({
@@ -69,9 +69,21 @@ const newNote = (): Note => ({
   updatedAt: Date.now(),
   textStyle: { ...DEFAULT_STYLE },
 });
+
+const loadNotes = (): Note[] => {
+  try {
+    if (typeof window === "undefined") return [];
+    const saved = localStorage.getItem("notes_v2");
+    if (!saved) return [];
+    return JSON.parse(saved) as Note[];
+  } catch {
+    return [];
+  }
+};
+
 export default function NotesPage({ onBack }: { onBack: () => void }) {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Note[]>(() => loadNotes());
+  const [activeId, setActiveId] = useState<string | null>(() => loadNotes()[0]?.id ?? null);
   const [tab, setTab] = useState<"write" | "style" | "draw">("write");
   const [tool, setTool] = useState<"pencil" | "pen" | "highlighter" | "eraser">("pen");
   const [brushSize, setBrushSize] = useState(1);
@@ -85,15 +97,6 @@ export default function NotesPage({ onBack }: { onBack: () => void }) {
   const lastPos = useRef<{ x: number; y: number } | null>(null);
 
   const active = notes.find(n => n.id === activeId) ?? null;
-
-  useEffect(() => {
-    const saved = ls.get("notes_v2");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setNotes(parsed);
-      if (parsed.length > 0) setActiveId(parsed[0].id);
-    }
-  }, []);
 
   const save = (updated: Note[]) => {
     setNotes(updated);
@@ -138,7 +141,7 @@ export default function NotesPage({ onBack }: { onBack: () => void }) {
       img.onload = () => ctx.drawImage(img, 0, 0);
       img.src = active.drawing;
     }
-  }, [tab, activeId]);
+  }, [tab, activeId, active?.drawing]);
 
   const getPos = (e: React.TouchEvent | React.MouseEvent) => {
     const canvas = canvasRef.current!;
@@ -201,6 +204,8 @@ export default function NotesPage({ onBack }: { onBack: () => void }) {
     if (active) updateNote(active.id, { drawing: dataUrl });
   };
 
+  const [now] = useState(() => Date.now());
+
   const clearCanvas = () => {
     if (!ctxRef.current || !canvasRef.current) return;
     ctxRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -208,7 +213,7 @@ export default function NotesPage({ onBack }: { onBack: () => void }) {
   };
 
   const timeAgo = (ts: number) => {
-    const diff = Date.now() - ts;
+    const diff = now - ts;
     if (diff < 60000) return "just now";
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;

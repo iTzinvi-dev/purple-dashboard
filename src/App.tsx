@@ -32,14 +32,41 @@ const DEFAULT_TODOS = [
   { id: 6, text: "be proud of yourself", done: false },
 ];
 
+interface Weather {
+  temp: number;
+  desc: string;
+  icon: string;
+}
+
 const W_ICON: Record<string, string> = {
   Clear: "☀️", Clouds: "☁️", Rain: "🌧️",
   Snow: "❄️", Thunderstorm: "⛈️", Drizzle: "🌦️", Mist: "🌫️",
 };
 
+const getJson = <T,>(key: string, fallback: T): T => {
+  try {
+    if (typeof window === "undefined") return fallback;
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
+
+const getString = (key: string, fallback: string): string => {
+  try {
+    if (typeof window === "undefined") return fallback;
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : raw;
+  } catch {
+    return fallback;
+  }
+};
+
 const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch {} },
+  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { void 0; } },
 };
 
 const fmt = (s: number) =>
@@ -62,22 +89,22 @@ const Spark = ({ size = 11, color = "#C4A8E0", cls = "twinkle" }) => (
   </svg>
 );
 
-const GL = ({ children, radius = 26, mode: _mode }: { children: React.ReactNode; radius?: number; mode?: string }) => (
+const GL = ({ children, radius = 26 }: { children: React.ReactNode; radius?: number; mode?: string }) => (
   <div className="glass-card" style={{ borderRadius: radius }}>
     {children}
   </div>
 );
 export default function PurpleDashboard() {
-  const [time,         setTime]         = useState(new Date());
-  const [name,         setName]         = useState("[name]");
-  const [todos,        setTodos]        = useState(DEFAULT_TODOS);
-  const [newTodo,      setNewTodo]      = useState("");
-  const [moods,        setMoods]        = useState<string[]>([]);
-  const [journal,      setJournal]      = useState("");
-  const [weather,      setWeather]      = useState<any>(null);
-  const [apiKey,       setApiKey]       = useState("");
-  const [tempKey,      setTempKey]      = useState("");
-  const [tempName,     setTempName]     = useState("");
+  const [time, setTime] = useState(new Date());
+  const [name, setName] = useState(() => getString("name", "[name]"));
+  const [todos, setTodos] = useState(() => getJson<typeof DEFAULT_TODOS>("todos", DEFAULT_TODOS));
+  const [newTodo, setNewTodo] = useState("");
+  const [moods, setMoods] = useState<string[]>(() => getJson<string[]>("moods", []));
+  const [journal, setJournal] = useState(() => getString("journal", ""));
+  const [weather, setWeather] = useState<Weather | null>(null);
+  const [apiKey, setApiKey] = useState(() => getString("wkey", ""));
+  const [tempKey, setTempKey] = useState(apiKey);
+  const [tempName, setTempName] = useState(name);
   const [showSettings, setShowSettings] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [playlist,     setPlaylist]     = useState<{ name: string; url: string }[]>([]);
@@ -96,24 +123,23 @@ export default function PurpleDashboard() {
   const q        = QUOTES[new Date().getDate() % QUOTES.length];
 
   useEffect(() => {
-    const td = ls.get("todos");   if (td) setTodos(JSON.parse(td));
-    const md = ls.get("moods");   if (md) setMoods(JSON.parse(md));
-    const jd = ls.get("journal"); if (jd) setJournal(jd);
-    const nd = ls.get("name");    if (nd) { setName(nd); setTempName(nd); }
-    const kd = ls.get("wkey");    if (kd) { setApiKey(kd); setTempKey(kd); }
-  }, []);
-
-  useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
-    
+    if (!apiKey.trim()) return;
+
     const go = (lat: number, lon: number) =>
       fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`)
         .then(r => r.json())
-        .then(d => { if (d.main) setWeather({ temp: Math.round(d.main.temp), desc: d.weather[0].description, icon: d.weather[0].main }); });
+        .then(d => {
+          if (d?.main && Array.isArray(d.weather) && d.weather.length > 0) {
+            setWeather({ temp: Math.round(d.main.temp), desc: d.weather[0].description, icon: d.weather[0].main });
+          }
+        })
+        .catch(() => { void 0; });
+
     navigator.geolocation?.getCurrentPosition(
       ({ coords }) => go(coords.latitude, coords.longitude),
       () => go(23.8, 90.4),
@@ -126,8 +152,8 @@ export default function PurpleDashboard() {
     const wasPlaying = playing;
     audio.src = playlist[curIdx].url;
     audio.load();
-    if (wasPlaying) audio.play().catch(() => {});
-  }, [curIdx, playlist]);
+    if (wasPlaying) audio.play().catch(() => { void 0; });
+  }, [curIdx, playlist, playing]);
 
   const togglePlay = async () => {
     const audio = audioRef.current;
@@ -138,7 +164,7 @@ export default function PurpleDashboard() {
       audio.load();
     }
     if (playing) { audio.pause(); }
-    else { try { await audio.play(); } catch {} }
+    else { try { await audio.play(); } catch { void 0; } }
   };
 
   const skip = (d: number) => {
@@ -186,8 +212,18 @@ export default function PurpleDashboard() {
   };
 
   const saveSettings = () => {
-    if (tempName.trim()) { setName(tempName.trim()); ls.set("name", tempName.trim()); }
-    if (tempKey.trim())  { setApiKey(tempKey.trim()); ls.set("wkey", tempKey.trim()); }
+    if (tempName.trim()) {
+      setName(tempName.trim());
+      ls.set("name", tempName.trim());
+    }
+    if (tempKey.trim()) {
+      setApiKey(tempKey.trim());
+      ls.set("wkey", tempKey.trim());
+    } else {
+      setWeather(null);
+      setApiKey("");
+      ls.set("wkey", "");
+    }
     setShowSettings(false);
   };
 
@@ -542,16 +578,25 @@ export default function PurpleDashboard() {
         <p className="text-center text-[11px] text-[#B49FD0] py-1">made with 💜 just for you</p>
       </div>
 
+      {showNotes && (
+        <div className="fixed inset-0 z-[400] bg-white/80 backdrop-blur-sm">
+          <NotesPage onBack={() => { setShowNotes(false); setActiveTab("home"); }} />
+        </div>
+      )}
+
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center pt-2.5 pb-[18px]"
         style={{ background: "rgba(232,224,250,.90)", backdropFilter: "blur(24px)", borderTop: "1px solid rgba(255,255,255,.82)", boxShadow: "0 -4px 28px rgba(118,84,168,.08)" }}>
         {(["🤍","💬","🎀","⭐","🎵"] as const).map((icon, i) => {
           const id = ["home","chat","bow","star","music"][i];
-              if (id === "chat") { setShowNotes(true); return; }
           const active = activeTab === id;
-  if (showNotes) return <NotesPage onBack={() => setShowNotes(false)} />;
           return (
-            <button key={id} onClick={() => setActiveTab(id)}
+            <button key={id} onClick={() => {
+                if (id === "chat") {
+                  setShowNotes(true);
+                }
+                setActiveTab(id);
+              }}
               className="bg-transparent border-none cursor-pointer transition-all duration-200"
               style={{ fontSize: active ? "26px" : "21px", opacity: active ? 1 : .38, transform: active ? "translateY(-3px)" : "none", padding: "4px 14px" }}>
               {icon}
