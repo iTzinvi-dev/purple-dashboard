@@ -188,6 +188,29 @@ export default function PurpleDashboard() {
   }, [darkMode]);
 
   useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest("button");
+      if (!(button instanceof HTMLElement)) return;
+      if (button.closest(".no-ripple")) return;
+
+      const rect = button.getBoundingClientRect();
+      const ripple = document.createElement("span");
+      const size = Math.max(rect.width, rect.height) * 1.8;
+      ripple.className = "ripple";
+      ripple.style.width = `${size}px`;
+      ripple.style.height = `${size}px`;
+      ripple.style.left = `${event.clientX - rect.left - size / 2}px`;
+      ripple.style.top = `${event.clientY - rect.top - size / 2}px`;
+      button.appendChild(ripple);
+      window.setTimeout(() => { ripple.remove(); }, 600);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !playlist[curIdx]) return;
     const wasPlaying = playing;
@@ -297,7 +320,6 @@ export default function PurpleDashboard() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9685B0] mb-1">dark mode</p>
-                    <p className="text-[12px] text-[#5A3E8A]">deep purple night theme for calm focus</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" checked={tempDarkMode} onChange={e => setTempDarkMode(e.target.checked)}
@@ -309,9 +331,9 @@ export default function PurpleDashboard() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setShowSettings(false)}
-                  className="flex-1 py-3 rounded-2xl border border-[#DDD3F0] text-[#9685B0] text-sm active:scale-95">cancel</button>
+                  className="flex-1 py-3 rounded-2xl border border-[#DDD3F0] text-[#9685B0] text-sm micro-button">cancel</button>
                 <button onClick={saveSettings}
-                  className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple">apply</button>
+                  className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">apply</button>
               </div>
             </div>
           </GL>
@@ -328,30 +350,30 @@ export default function PurpleDashboard() {
               <div className="p-6">
                 <div className="flex justify-between items-center mb-5">
                   <h3 className="text-lg font-medium italic text-[#5A3E8A]" style={{ fontFamily: "var(--font-display)" }}>🎵 playlist</h3>
-                  <button onClick={() => setShowPlaylist(false)} className="text-[#9685B0] text-sm bg-transparent border-none cursor-pointer">close</button>
+                  <button onClick={() => setShowPlaylist(false)} className="text-[#9685B0] text-sm bg-transparent border-none cursor-pointer icon-button">close</button>
                 </div>
                 {playlist.length === 0 ? (
                   <p className="text-[13px] text-[#9685B0] text-center py-4">no songs yet — tap ＋ to add 💜</p>
                 ) : (
                   <div className="max-h-64 overflow-y-auto flex flex-col gap-2">
                     {playlist.map((track, i) => (
-                      <div key={i} className="flex items-center gap-3 p-3 rounded-2xl transition-all"
+                      <div key={i} className="interactive-option flex items-center gap-3 p-3 rounded-2xl transition-all"
                         style={{ background: i === curIdx ? "rgba(118,84,168,.15)" : "rgba(255,255,255,.3)" }}>
                         <button onClick={() => { setCurIdx(i); setShowPlaylist(false); }}
-                          className="bg-transparent border-none cursor-pointer text-base p-0 leading-none">
+                          className="bg-transparent border-none cursor-pointer text-base p-0 leading-none icon-button">
                           {i === curIdx ? "💜" : "🤍"}
                         </button>
                         <span className="flex-1 text-[12px] truncate" style={{ color: i === curIdx ? "#7654A8" : "#261B40", fontWeight: i === curIdx ? 600 : 400 }}>
                           {track.name}
                         </span>
                         <button onClick={() => removeSong(i)}
-                          className="bg-transparent border-none cursor-pointer text-[13px] text-[#C4A8E0] px-1 active:scale-90">✕</button>
+                          className="bg-transparent border-none cursor-pointer text-[13px] text-[#C4A8E0] px-1 icon-button">✕</button>
                       </div>
                     ))}
                   </div>
                 )}
                 <button onClick={() => fileRef.current?.click()}
-                  className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold btn-purple">
+                  className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">
                   ＋ add songs
                 </button>
               </div>
@@ -372,7 +394,7 @@ export default function PurpleDashboard() {
             <p className="mt-1.5 text-[11px] text-[#B49FD0]">{dateStr}</p>
           </div>
           <button onClick={() => { setTempDarkMode(darkMode); setShowSettings(true); }}
-            className="w-10 h-10 flex items-center justify-center text-lg active:scale-95 flex-shrink-0"
+            className="w-10 h-10 flex items-center justify-center text-lg icon-button nav-button flex-shrink-0"
             style={{ borderRadius: "50%", background: "rgba(255,255,255,0.55)", border: "1px solid rgba(255,255,255,0.88)", boxShadow: "0 2px 14px rgba(120,80,190,.1)" }}>⚙️</button>
         </div>
 
@@ -406,17 +428,17 @@ export default function PurpleDashboard() {
 
               <div className="flex items-center justify-between">
                 <button onClick={() => fileRef.current?.click()}
-                  className="bg-transparent border-none cursor-pointer text-[#B49FD0] text-lg p-1 active:scale-90">＋</button>
+                  className="bg-transparent border-none cursor-pointer text-[#B49FD0] text-lg p-1 icon-button">＋</button>
                 <button onClick={() => skip(-1)}
-                  className="bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 active:scale-90">⏮</button>
+                  className="bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 icon-button">⏮</button>
                 <button onClick={togglePlay}
-                  className="w-11 h-11 rounded-full text-lg flex items-center justify-center flex-shrink-0 btn-purple">
+                  className="w-11 h-11 rounded-full text-lg flex items-center justify-center flex-shrink-0 btn-purple icon-button shimmer-press">
                   {playing ? "⏸" : "▶"}
                 </button>
                 <button onClick={() => skip(1)}
-                  className="bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 active:scale-90">⏭</button>
+                  className="bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 icon-button">⏭</button>
                 <button onClick={() => setShowPlaylist(true)}
-                  className="bg-transparent border-none cursor-pointer text-[#B49FD0] text-base p-1 active:scale-90">🎼</button>
+                  className="bg-transparent border-none cursor-pointer text-[#B49FD0] text-base p-1 icon-button">🎼</button>
               </div>
             </div>
           </GL>
@@ -487,7 +509,7 @@ export default function PurpleDashboard() {
                 {todos.map(t => (
                   <div key={t.id} className="flex items-center gap-2.5 mb-3 px-1 py-0.5">
                     <button onClick={() => toggleTodo(t.id)}
-                      className="bg-transparent border-none cursor-pointer text-[17px] p-0 leading-none flex-shrink-0 active:scale-90">
+                      className={`heart-toggle ${t.done ? "heart-pop" : ""}`}>
                       {t.done ? "💜" : "🤍"}
                     </button>
                     <span className={`flex-1 text-[13px] transition-all duration-200 ${t.done ? "line-through text-[#9685B0]" : "text-[#261B40]"}`}>
@@ -504,7 +526,7 @@ export default function PurpleDashboard() {
                   placeholder="add a task... 💜"
                   className="flex-1 px-4 py-2.5 rounded-2xl border border-[#DDD3F0] bg-white/60 text-[#261B40] text-[13px]" />
                 <button onClick={addTodo}
-                  className="w-11 h-11 rounded-2xl text-xl flex items-center justify-center flex-shrink-0 btn-purple">＋</button>
+                  className="w-11 h-11 rounded-2xl text-xl flex items-center justify-center flex-shrink-0 btn-purple shimmer-press">＋</button>
               </div>
             </div>
           </GL>
@@ -530,7 +552,7 @@ export default function PurpleDashboard() {
               </div>
               {MOODS.map(({ label, emoji }) => (
                 <div key={label} onClick={() => toggleMood(label)}
-                  className="flex items-center gap-1.5 mb-1.5 cursor-pointer px-1.5 py-0.5 rounded-xl transition-all active:scale-95"
+                  className="interactive-option flex items-center gap-1.5 mb-1.5 cursor-pointer px-1.5 py-0.5 rounded-xl transition-all active:scale-95"
                   style={{ background: moods.includes(label) ? "rgba(180,150,218,.16)" : "transparent" }}>
                   <span className="text-xs leading-none">{moods.includes(label) ? "💜" : "🤍"}</span>
                   <span className={`text-[11px] flex-1 transition-colors ${moods.includes(label) ? "text-[#7654A8] font-semibold" : "text-[#9685B0]"}`}>{label}</span>

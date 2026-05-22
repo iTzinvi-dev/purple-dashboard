@@ -25,6 +25,31 @@
   0% { background-position: -300% center; }
   100% { background-position: 300% center; }
 }
+@keyframes ripple {
+  0% { transform: scale(0); opacity: 0.45; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@keyframes heartPop {
+  0% { transform: scale(0.7); opacity: 0.4; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes iconTap {
+  0% { transform: scale(1) rotate(0deg); }
+  40% { transform: scale(0.93) rotate(-6deg); }
+  70% { transform: scale(1.05) rotate(3deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+@keyframes shimmerSweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+@keyframes springUp {
+  0% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+  55% { transform: translateY(2px); }
+  100% { transform: translateY(0); }
+}
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
@@ -58,14 +83,82 @@
 }
 
 .btn-purple {
+  position: relative;
+  overflow: hidden;
   background: linear-gradient(135deg, #7654A8, #A870D8);
   box-shadow: 0 6px 20px rgba(120,80,190,0.32);
   border: none;
   color: white;
   cursor: pointer;
-  transition: transform 0.18s, box-shadow 0.18s;
+  transition: transform 0.18s, box-shadow 0.18s, background 0.18s, color 0.18s;
 }
-.btn-purple:active { transform: scale(0.95); }
+.btn-purple:hover { transform: translateY(-1px) scale(1.01); box-shadow: 0 9px 24px rgba(120,80,190,0.36); }
+.btn-purple:active { transform: scale(0.96); }
+
+button {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+button:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(128,80,186,0.12); }
+button:active { transform: scale(0.94); }
+button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(135,90,190,0.18); }
+
+button .ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(190, 144, 255, 0.28);
+  pointer-events: none;
+  transform: scale(0);
+  animation: ripple 0.55s ease-out;
+}
+
+.icon-button:active { animation: iconTap 0.35s ease-out; }
+
+.heart-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  min-width: 32px;
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+.heart-pop { animation: heartPop 0.45s ease-out both; }
+
+.shimmer-press {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-press::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.24) 40%, rgba(255,255,255,0.42) 50%, transparent 60%);
+  transform: translateX(-120%);
+  transition: transform 0.45s ease;
+}
+.shimmer-press:active::before { transform: translateX(120%); }
+
+.icon-button {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.nav-button:active { animation: springUp 0.35s ease-out; }
+
+.interactive-option {
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+.interactive-option:hover { transform: translateY(-1px); }
+.interactive-option:active { transform: scale(0.98); }
+
+.glass-card {
+  animation: glowPulse 8s ease-in-out infinite alternate;
+  transition: transform 0.35s ease, box-shadow 0.35s ease, background 0.35s ease;
+}
+.glass-card:hover { transform: translateY(-3px); box-shadow: 0 22px 64px rgba(120,80,190,0.14); }
 
 .todo-row:hover .del-btn { opacity: 1 !important; }
 
