@@ -10,13 +10,14 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
+      manifestFilename: 'manifest.json',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon-192x192.png', 'icon-512x512.png', 'icon.svg'],
       manifest: {
-        name: 'Purple Dashboard',
-        short_name: 'Purple Dashboard',
+        name: 'My Purple Space 💜',
+        short_name: 'Purple',
         description: 'Notes & Daily Activities — a soft, dreamy place to journal and track your day.',
-        theme_color: '#c084fc',
-        background_color: '#f3e8ff',
+        theme_color: '#C8B4E3',
+        background_color: '#DDD5EC',
         start_url: '/?source=pwa',
         display: 'standalone',
         scope: '/',
