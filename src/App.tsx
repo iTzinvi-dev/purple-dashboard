@@ -38,11 +38,6 @@ interface Weather {
   icon: string;
 }
 
-const W_ICON: Record<string, string> = {
-  Clear: "☀️", Clouds: "☁️", Rain: "🌧️",
-  Snow: "❄️", Thunderstorm: "⛈️", Drizzle: "🌦️", Mist: "🌫️",
-};
-
 const getJson = <T,>(key: string, fallback: T): T => {
   try {
     if (typeof window === "undefined") return fallback;
@@ -96,15 +91,15 @@ const GL = ({ children, radius = 26 }: { children: React.ReactNode; radius?: num
 );
 export default function PurpleDashboard() {
   const [time, setTime] = useState(new Date());
-  const [name, setName] = useState(() => getString("name", "[name]"));
+  const name = "Pemii";
   const [todos, setTodos] = useState(() => getJson<typeof DEFAULT_TODOS>("todos", DEFAULT_TODOS));
   const [newTodo, setNewTodo] = useState("");
   const [moods, setMoods] = useState<string[]>(() => getJson<string[]>("moods", []));
   const [journal, setJournal] = useState(() => getString("journal", ""));
   const [weather, setWeather] = useState<Weather | null>(null);
-  const [apiKey, setApiKey] = useState(() => getString("wkey", ""));
-  const [tempKey, setTempKey] = useState(apiKey);
-  const [tempName, setTempName] = useState(name);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => getJson("darkMode", false));
+  const [tempDarkMode, setTempDarkMode] = useState(() => getJson("darkMode", false));
   const [showSettings, setShowSettings] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [playlist,     setPlaylist]     = useState<{ name: string; url: string }[]>([]);
@@ -128,23 +123,69 @@ export default function PurpleDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!apiKey.trim()) return;
+    const codeMap: Record<number, { icon: string; desc: string }> = {
+      0: { icon: "☀️", desc: "clear sky" },
+      1: { icon: "🌤️", desc: "mainly clear" },
+      2: { icon: "⛅", desc: "partly cloudy" },
+      3: { icon: "☁️", desc: "overcast" },
+      45: { icon: "🌫️", desc: "fog" },
+      48: { icon: "🌫️", desc: "depositing rime fog" },
+      51: { icon: "🌦️", desc: "light drizzle" },
+      53: { icon: "🌦️", desc: "moderate drizzle" },
+      55: { icon: "🌧️", desc: "dense drizzle" },
+      56: { icon: "🌧️", desc: "freezing drizzle" },
+      57: { icon: "🌧️", desc: "freezing drizzle" },
+      61: { icon: "🌧️", desc: "light rain" },
+      63: { icon: "🌧️", desc: "moderate rain" },
+      65: { icon: "🌧️", desc: "heavy rain" },
+      66: { icon: "🌧️", desc: "freezing rain" },
+      67: { icon: "🌧️", desc: "heavy freezing rain" },
+      71: { icon: "❄️", desc: "snow fall" },
+      73: { icon: "❄️", desc: "snow fall" },
+      75: { icon: "❄️", desc: "snow fall" },
+      77: { icon: "❄️", desc: "snow grains" },
+      80: { icon: "🌧️", desc: "rain showers" },
+      81: { icon: "🌧️", desc: "moderate showers" },
+      82: { icon: "🌧️", desc: "violent showers" },
+      85: { icon: "❄️", desc: "snow showers" },
+      86: { icon: "❄️", desc: "heavy snow showers" },
+      95: { icon: "⛈️", desc: "thunderstorm" },
+      96: { icon: "⛈️", desc: "thunderstorm" },
+      99: { icon: "⛈️", desc: "thunderstorm" },
+    };
 
-    const go = (lat: number, lon: number) =>
-      fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`)
-        .then(r => r.json())
-        .then(d => {
-          if (d?.main && Array.isArray(d.weather) && d.weather.length > 0) {
-            setWeather({ temp: Math.round(d.main.temp), desc: d.weather[0].description, icon: d.weather[0].main });
-          }
-        })
-        .catch(() => { void 0; });
+    const updateWeather = async (lat: number, lon: number) => {
+      setWeatherLoading(true);
+      try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`);
+        const data = await res.json();
+        const current = data?.current_weather;
+        if (current) {
+          const mapped = codeMap[current.weathercode] ?? { icon: "🌤️", desc: "weather" };
+          setWeather({ temp: Math.round(current.temperature), desc: mapped.desc, icon: mapped.icon });
+        }
+      } catch {
+        setWeather(null);
+      } finally {
+        setWeatherLoading(false);
+      }
+    };
 
-    navigator.geolocation?.getCurrentPosition(
-      ({ coords }) => go(coords.latitude, coords.longitude),
-      () => go(23.8, 90.4),
-    );
-  }, [apiKey]);
+    const fallback = () => updateWeather(23.8, 90.4);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => updateWeather(coords.latitude, coords.longitude),
+        fallback,
+      );
+    } else {
+      fallback();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.classList.toggle("dark", darkMode);
+  }, [darkMode]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -212,18 +253,8 @@ export default function PurpleDashboard() {
   };
 
   const saveSettings = () => {
-    if (tempName.trim()) {
-      setName(tempName.trim());
-      ls.set("name", tempName.trim());
-    }
-    if (tempKey.trim()) {
-      setApiKey(tempKey.trim());
-      ls.set("wkey", tempKey.trim());
-    } else {
-      setWeather(null);
-      setApiKey("");
-      ls.set("wkey", "");
-    }
+    setDarkMode(tempDarkMode);
+    ls.set("darkMode", JSON.stringify(tempDarkMode));
     setShowSettings(false);
   };
 
@@ -233,7 +264,13 @@ export default function PurpleDashboard() {
   const dateStr  = time.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   return (
     <div className="min-h-screen pb-24"
-      style={{ background: "linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%)", fontFamily: "'DM Sans', system-ui, sans-serif", color: "#261B40" }}>
+      style={{
+        background: darkMode
+          ? "radial-gradient(circle at top, rgba(135, 90, 190, 0.34), transparent 35%), linear-gradient(180deg, #17082E 0%, #0F0620 100%)"
+          : "linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%)",
+        fontFamily: "'DM Sans', system-ui, sans-serif",
+        color: darkMode ? "#F4E8FF" : "#261B40",
+      }}>
 
       <PetalCanvas />
       <audio ref={audioRef}
@@ -256,18 +293,25 @@ export default function PurpleDashboard() {
                 <Bow size={24} color="#C4A8E0" />
                 <h3 className="text-xl font-medium italic text-[#5A3E8A]" style={{ fontFamily: "var(--font-display)" }}>settings</h3>
               </div>
-              <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#9685B0] mb-2">display name</label>
-              <input value={tempName} onChange={e => setTempName(e.target.value)} placeholder="her name here..."
-                className="w-full px-4 py-3 rounded-2xl border border-[#DDD3F0] bg-white/60 text-[#261B40] text-sm mb-5" />
-              <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#9685B0] mb-2">weather api key</label>
-              <input value={tempKey} onChange={e => setTempKey(e.target.value)} placeholder="openweathermap key..."
-                className="w-full px-4 py-3 rounded-2xl border border-[#DDD3F0] bg-white/60 text-[#261B40] text-sm mb-2" />
-              <p className="text-[11px] text-[#9685B0] mb-6">free at openweathermap.org ☁️</p>
+              <div className="mb-5 p-4 rounded-3xl border border-[#DDD3F0] bg-white/70">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9685B0] mb-1">dark mode</p>
+                    <p className="text-[12px] text-[#5A3E8A]">deep purple night theme for calm focus</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={tempDarkMode} onChange={e => setTempDarkMode(e.target.checked)}
+                      className="sr-only peer" />
+                    <div className="w-11 h-6 bg-[#DDD3F0] rounded-full peer-checked:bg-[#7A4DD8] peer-focus:ring-2 peer-focus:ring-[#C4A8E0] transition-all" />
+                    <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-md peer-checked:translate-x-5 transition-transform" />
+                  </label>
+                </div>
+              </div>
               <div className="flex gap-2">
                 <button onClick={() => setShowSettings(false)}
                   className="flex-1 py-3 rounded-2xl border border-[#DDD3F0] text-[#9685B0] text-sm active:scale-95">cancel</button>
                 <button onClick={saveSettings}
-                  className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple">save 💜</button>
+                  className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple">apply</button>
               </div>
             </div>
           </GL>
@@ -327,7 +371,7 @@ export default function PurpleDashboard() {
               style={{ fontFamily: "var(--font-display)", letterSpacing: "-.4px" }}>{name}</h1>
             <p className="mt-1.5 text-[11px] text-[#B49FD0]">{dateStr}</p>
           </div>
-          <button onClick={() => { setTempKey(apiKey); setTempName(name); setShowSettings(true); }}
+          <button onClick={() => { setTempDarkMode(darkMode); setShowSettings(true); }}
             className="w-10 h-10 flex items-center justify-center text-lg active:scale-95 flex-shrink-0"
             style={{ borderRadius: "50%", background: "rgba(255,255,255,0.55)", border: "1px solid rgba(255,255,255,0.88)", boxShadow: "0 2px 14px rgba(120,80,190,.1)" }}>⚙️</button>
         </div>
@@ -415,7 +459,7 @@ export default function PurpleDashboard() {
           <GL radius={26}>
             <div className="py-6 px-3.5 flex flex-col items-center justify-center text-center">
               {weather ? (<>
-                <span className="text-[32px] leading-none float">{W_ICON[weather.icon] ?? "🌤️"}</span>
+                <span className="text-[32px] leading-none float">{weather.icon}</span>
                 <p className="font-semibold text-[#5A3E8A] leading-none tracking-[-1.5px] mt-2"
                   style={{ fontFamily: "var(--font-display)", fontSize: "38px" }}>{weather.temp}°</p>
                 <p className="text-[10px] text-[#9685B0] mt-1 capitalize">{weather.desc}</p>
@@ -423,7 +467,7 @@ export default function PurpleDashboard() {
               </>) : (<>
                 <span className="text-[32px] leading-none breathe">🌤️</span>
                 <p className="text-[10px] text-[#9685B0] mt-2.5 leading-relaxed">
-                  {apiKey ? "loading..." : "add key\nin settings ⚙️"}
+                  {weatherLoading ? "finding weather with location..." : "weather unavailable — allow location or refresh"}
                 </p>
               </>)}
             </div>

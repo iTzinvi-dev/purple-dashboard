@@ -74,3 +74,33 @@
 ::-webkit-scrollbar-thumb { background: rgba(170,140,210,.3); border-radius: 3px; }
 ::placeholder { color: #C5B4DA; }
 input:focus, textarea:focus { outline: none; border-color: #C4A8E0 !important; }
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+}
+
+.dark .glass-card {
+  background: rgba(18, 7, 46, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dark body {
+  background: #0b0320;
+  color: #f0e7ff;
+}
+
+.dark .btn-purple {
+  background: linear-gradient(135deg, #7B4FCE, #AE7EE8);
+}
+
+.dark input,
+.dark textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f4e7ff;
+}
+
+.dark ::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
