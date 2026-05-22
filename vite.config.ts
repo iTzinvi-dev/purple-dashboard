@@ -9,34 +9,54 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon-192x192.png', 'icon-512x512.png', 'icon.svg'],
       manifest: {
-        name: 'My Purple Space 💜',
-        short_name: 'Purple',
-        theme_color: '#C8B4E3',
-        background_color: '#DDD5EC',
+        name: 'Purple Dashboard',
+        short_name: 'Purple Dashboard',
+        description: 'Notes & Daily Activities — a soft, dreamy place to journal and track your day.',
+        theme_color: '#c084fc',
+        background_color: '#f3e8ff',
+        start_url: '/?source=pwa',
         display: 'standalone',
+        scope: '/',
         orientation: 'portrait',
-        start_url: '/',
         icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
-        ],
+          { src: 'icon-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          { src: 'icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+        ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: { cacheName: 'google-fonts', expiration: { maxEntries: 10, maxAgeSeconds: 31536000 } },
+            urlPattern: /\/api\/.*$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              networkTimeoutSeconds: 10,
+              expiration: { maxEntries: 60, maxAgeSeconds: 24 * 3600 }
+            }
           },
           {
-            urlPattern: /^https:\/\/api\.openweathermap\.org\/.*/i,
-            handler: 'NetworkFirst',
-            options: { cacheName: 'weather', expiration: { maxEntries: 5, maxAgeSeconds: 1800 } },
+            urlPattern: /\/.*\.(?:png|jpg|jpeg|svg|gif|webp|avif)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'image-assets',
+              expiration: { maxEntries: 100, maxAgeSeconds: 30 * 24 * 3600 }
+            }
           },
+          {
+            urlPattern: /\/.*\.(?:css|js)$/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'static-resources',
+              expiration: { maxEntries: 60 }
+            }
+          }
         ],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       },
-    }),
-  ],
+      devOptions: { enabled: true, navigateFallback: '/' }
+    })
+  ]
 })
