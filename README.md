@@ -1,75 +1,69 @@
-# React + TypeScript + Vite
+# Purple Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A soft, dreamy PWA for daily journaling, todos, mood tracking and notes — designed to be local-first, encrypted at rest, and fully usable offline.
 
-Currently, two official plugins are available:
+## Privacy & security model
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Layer | What it protects |
+|---|---|
+| **AES-GCM-256 encryption at rest** | Every entry (todos, notes, journal, settings, drawings) is encrypted in IndexedDB. Browser extensions or raw IDB dumps see only ciphertext. |
+| **Local-first** | No accounts required. No analytics. No telemetry. The app works fully offline. |
+| **Self-hosted fonts** | No Google Fonts CDN — no third-party connection on page load. |
+| **City-level geolocation** | Coordinates rounded to ~11km before sending to the weather API. |
+| **CSP headers** | Outbound network is allow-listed: only `api.open-meteo.com` and (optionally) Google Drive. |
+| **Optional Drive backup** | Re-encrypted with a passphrase derived via PBKDF2-SHA256 (600k iterations) **before** upload. Google sees only ciphertext. Stored in `appDataFolder` (hidden, app-only scope). Forgot the passphrase = the backup is unrecoverable. There is no reset. |
+| **In-memory tokens** | Drive OAuth access tokens never touch persistent storage. |
 
-## React Compiler
+## Setup
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Optional — enable Google Drive backup
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. Go to [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials).
+2. Enable the **Google Drive API** in your project.
+3. Create an **OAuth 2.0 Client ID** of type *Web application*.
+4. Add your origin (e.g. `https://your-app.vercel.app`, plus `http://localhost:5173` for dev) under *Authorized JavaScript origins*.
+5. Copy the Client ID into a local `.env` file:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+   ```env
+   VITE_GOOGLE_CLIENT_ID=xxxxxxxxxx-xxxxxxxxx.apps.googleusercontent.com
+   ```
+
+6. On Vercel (or wherever you deploy), set the same `VITE_GOOGLE_CLIENT_ID` environment variable in the project settings, then redeploy.
+
+The scope used is `drive.appdata` only — the backup file is invisible in your Drive UI and inaccessible to other apps. If `VITE_GOOGLE_CLIENT_ID` is unset, the **Backup** and **Restore backup** options simply do nothing; **Export to file / Import from file** continue to work fully offline.
+
+## Backup format
+
+Backups are JSON envelopes with base64 fields:
+
+```json
+{
+  "app": "purple-dashboard",
+  "version": 1,
+  "iter": 600000,
+  "salt": "…",
+  "iv": "…",
+  "ciphertext": "…",
+  "createdAt": 1737000000000
+}
 ```
-# purple-dashboard
-# purple-dashboard
+
+The same envelope is used for both Drive backups and local `.purple` files, so you can move data between the two freely.
+
+## Scripts
+
+```bash
+npm run dev      # local dev server
+npm run build    # production build
+npm run preview  # serve the production build
+npm run lint     # eslint
+```
+
+## Stack
+
+React 19 · TypeScript · Vite · Tailwind v4 · vite-plugin-pwa · Web Crypto · IndexedDB.
