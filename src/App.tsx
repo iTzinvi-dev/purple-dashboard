@@ -934,8 +934,8 @@ export default function PurpleDashboard() {
                 else if (id === "star")   setOverlayPage("star");
                 else                      setOverlayPage(null);
               }}
-              className="bg-transparent border-none cursor-pointer flex flex-col items-center"
-              style={{ opacity: active ? 1 : .42, transform: active ? "translate3d(0,-3px,0)" : "none", padding: "4px 14px", transition: "transform .18s var(--t-bezier), opacity .18s ease" }}>
+              className="nav-button bg-transparent border-none cursor-pointer flex flex-col items-center"
+              style={{ opacity: active ? 1 : .42, transform: active ? "translate3d(0,-3px,0)" : "none", padding: "4px 14px" }}>
               <span className="nav-icon" style={{ fontSize: active ? 26 : 21, transform: active ? "scale(1.06)" : "scale(1)" }}>{icon}</span>
               {active && <span className="nav-indicator" aria-hidden />}
             </button>
