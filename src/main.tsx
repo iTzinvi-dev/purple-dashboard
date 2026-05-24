@@ -15,12 +15,12 @@ createRoot(document.getElementById('root')!).render(
 // new SW activates immediately. We just trigger a one-time refresh on update.
 registerSW({
   immediate: true,
-  onNeedRefresh() {
-    // New version ready — auto-update is enabled, so we just refresh next nav.
-    // (Could surface a UI banner here in future.)
-  },
   onOfflineReady() {
-    // Could log or surface a UI confirmation. Silent by design.
+    // Tell the app via a custom event so it can flash a toast.
+    window.dispatchEvent(new CustomEvent('pwa-offline-ready'))
+  },
+  onNeedRefresh() {
+    window.dispatchEvent(new CustomEvent('pwa-update-available'))
   },
   onRegisterError(error) {
     console.warn('SW registration failed', error)

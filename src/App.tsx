@@ -191,6 +191,25 @@ export default function PurpleDashboard() {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
+  // PWA lifecycle toasts
+  const [pwaToast, setPwaToast] = useState<null | { kind: "ready" | "update"; msg: string }>(null);
+  useEffect(() => {
+    const onReady = () => {
+      setPwaToast({ kind: "ready", msg: "offline ready 💜 your space works without wifi" });
+      setTimeout(() => setPwaToast(null), 4500);
+    };
+    const onUpdate = () => {
+      setPwaToast({ kind: "update", msg: "fresh updates ready — refresh anytime ✨" });
+      setTimeout(() => setPwaToast(null), 6000);
+    };
+    window.addEventListener("pwa-offline-ready", onReady);
+    window.addEventListener("pwa-update-available", onUpdate);
+    return () => {
+      window.removeEventListener("pwa-offline-ready", onReady);
+      window.removeEventListener("pwa-update-available", onUpdate);
+    };
+  }, []);
+
   // Online/offline tracking
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -398,6 +417,13 @@ export default function PurpleDashboard() {
       {!isOnline && (
         <div className="offline-banner">
           🌙 you're offline — your space still works, weather will be back soon
+        </div>
+      )}
+
+      {/* PWA lifecycle toast (offline ready / update available) */}
+      {pwaToast && (
+        <div className="pwa-toast" role="status">
+          {pwaToast.msg}
         </div>
       )}
 
