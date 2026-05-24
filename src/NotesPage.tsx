@@ -306,6 +306,9 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
     if (tab !== "draw") return;
     strokesRef.current = [];
     redoRef.current = [];
+    // Forcing a re-render here is intentional — undo/redo button enablement
+    // is derived from ref length and needs a render after we wipe history.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHistoryVersion(v => v + 1);
 
     if (active?.drawing) {
@@ -477,7 +480,12 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
     if (active) updateNote(active.id, { drawing: "" });
   };
 
+  // Read undo/redo availability via refs. We force a re-render whenever the
+  // history changes (via setHistoryVersion), so by the time render runs these
+  // ref values are guaranteed to be up to date for the buttons.
+  // eslint-disable-next-line react-hooks/refs
   const canUndo = strokesRef.current.length > 0;
+  // eslint-disable-next-line react-hooks/refs
   const canRedo = redoRef.current.length > 0;
 
   const [now] = useState(() => Date.now());
@@ -559,17 +567,21 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
               </div>
 
               {/* Tabs */}
-              <div style={{ display: "flex", borderBottom: "1px solid var(--border-card)", background: "var(--bg-card-soft)" }}>
+              <div className="tab-rail-underline" style={{ display: "flex", borderBottom: "1px solid var(--border-card)", background: "var(--bg-card-soft)", position: "relative" }}>
+                <span className="tab-pill" aria-hidden style={{
+                  left: `calc(${["write", "style", "draw"].indexOf(tab)} * (100% / 3))`,
+                  width: "calc(100% / 3)",
+                }} />
                 {(["write", "style", "draw"] as const).map(t => (
                   <button key={t} onClick={() => setTab(t)}
-                    style={{ flex: 1, padding: "10px 4px", border: "none", background: "none", cursor: "pointer", fontSize: 12, fontWeight: tab === t ? 700 : 400, color: tab === t ? "var(--accent)" : "var(--text-muted)", borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent" }}>
+                    style={{ flex: 1, padding: "10px 4px", border: "none", background: "none", cursor: "pointer", fontSize: 12, fontWeight: tab === t ? 700 : 400, color: tab === t ? "var(--accent)" : "var(--text-muted)", transition: "color .2s ease, font-weight .2s ease", position: "relative", zIndex: 1 }}>
                     {t === "write" ? "✏️ write" : t === "style" ? "🎨 style" : "🖌️ draw"}
                   </button>
                 ))}
               </div>
 
               {/* Tab Content */}
-              <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <div key={tab} className="tab-content" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
 
                 {tab === "write" && (
                   <textarea
@@ -600,6 +612,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
                       {FONTS.map(f => (
                         <button key={f.value} onClick={() => updateStyle({ fontFamily: f.value })}
+                          className={`option-chip ${active.textStyle.fontFamily === f.value ? "is-selected" : ""}`}
                           style={{
                             padding: "6px 12px", borderRadius: 12,
                             border: "1.5px solid",
@@ -626,6 +639,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                         const enabled = active.textStyle[key];
                         return (
                           <button key={key} onClick={() => updateStyle({ [key]: !enabled })}
+                            className={`option-chip ${enabled ? "is-selected" : ""}`}
                             style={{
                               width: 40, height: 40, borderRadius: 12,
                               border: "1.5px solid",
@@ -639,6 +653,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                       })}
                       {(["left", "center", "right"] as const).map(a => (
                         <button key={a} onClick={() => updateStyle({ align: a })}
+                          className={`option-chip ${active.textStyle.align === a ? "is-selected" : ""}`}
                           style={{
                             width: 40, height: 40, borderRadius: 12,
                             border: "1.5px solid",
@@ -659,6 +674,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
                       {COLORS.map(c => (
                         <button key={c} onClick={() => updateStyle({ color: c })} aria-label={`color ${c}`}
+                          className={`option-chip ${active.textStyle.color === c ? "is-selected" : ""}`}
                           style={{
                             width: 28, height: 28, borderRadius: "50%", background: c,
                             border: active.textStyle.color === c ? "3px solid var(--accent)" : "2px solid rgba(0,0,0,.1)",
@@ -672,6 +688,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                       {HIGHLIGHTS.map(c => (
                         <button key={c} onClick={() => updateStyle({ highlight: c })} aria-label={`highlight ${c}`}
+                          className={`option-chip ${active.textStyle.highlight === c ? "is-selected" : ""}`}
                           style={{
                             width: 28, height: 28, borderRadius: 8,
                             background: c === "transparent" ? "var(--bg-input)" : c,
@@ -698,6 +715,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                           { id: "eraser", icon: "🧽" },
                         ] as const).map(({ id, icon }) => (
                           <button key={id} onClick={() => setTool(id)}
+                            className={`option-chip ${tool === id ? "is-selected" : ""}`}
                             style={{
                               width: 36, height: 36, borderRadius: 10,
                               border: "1.5px solid",
@@ -711,6 +729,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                       <div style={{ display: "flex", gap: 4 }}>
                         {[0, 1, 2, 3].map(s => (
                           <button key={s} onClick={() => setBrushSize(s)}
+                            className={`option-chip ${brushSize === s ? "is-selected" : ""}`}
                             style={{
                               width: 32, height: 32, borderRadius: 10,
                               border: "1.5px solid",

@@ -12,23 +12,37 @@ interface Settings {
 const DEFAULTS: Settings = {
   focus: 25,
   shortBreak: 5,
-  longBreak: 15,
+  longBreak: 60,        // 1 hour — gives proper recovery time after a few focus cycles
   cyclesBeforeLong: 4,
 };
+
+const SETTINGS_KEY = "pomodoro_settings_v2";
 
 const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { void 0; } },
+  remove: (k: string) => { try { localStorage.removeItem(k); } catch { void 0; } },
 };
 
 const loadSettings = (): Settings => {
   try {
-    const raw = ls.get("pomodoro_settings_v1");
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...JSON.parse(raw) };
+    // v2 (current): use stored value verbatim, only filling in any missing keys.
+    const v2 = ls.get(SETTINGS_KEY);
+    if (v2) return { ...DEFAULTS, ...JSON.parse(v2) };
+
+    // v1 → v2 migration: keep user customizations, but push old default longBreak (15) up to new 60.
+    const v1 = ls.get("pomodoro_settings_v1");
+    if (v1) {
+      const parsed = { ...DEFAULTS, ...JSON.parse(v1) } as Settings;
+      if (parsed.longBreak === 15) parsed.longBreak = 60;
+      ls.set(SETTINGS_KEY, JSON.stringify(parsed));
+      ls.remove("pomodoro_settings_v1");
+      return parsed;
+    }
   } catch {
-    return DEFAULTS;
+    // fall through to defaults
   }
+  return DEFAULTS;
 };
 
 const loadCount = (): { date: string; completed: number } => {
@@ -84,23 +98,31 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
   const [showSettings, setShowSettings] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Ref keeps the latest handleComplete reachable from inside setInterval, so a
+  // running timer always uses fresh mode/settings/cycle/todayCount even if they
+  // change mid-session (no stale closure capture).
+  const handleCompleteRef = useRef<() => void>(() => {});
 
   const totalForMode = (m: Mode, s: Settings) =>
     (m === "focus" ? s.focus : m === "shortBreak" ? s.shortBreak : s.longBreak) * 60;
 
+  // When mode or settings change while paused, snap the visible time to the new
+  // total. Skipping this while running avoids interrupting an in-flight session.
   useEffect(() => {
-    if (!running) {
-      setSecondsLeft(totalForMode(mode, settings));
-    }
+    if (running) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSecondsLeft(totalForMode(mode, settings));
   }, [mode, settings, running]);
 
+  // Tick loop. Only the `running` flag drives setup/teardown of the interval —
+  // any mode/settings/cycle changes flow through the ref, never re-create it.
   useEffect(() => {
     if (!running) return;
     timerRef.current = setInterval(() => {
       setSecondsLeft(prev => {
         if (prev <= 1) {
           if (timerRef.current) clearInterval(timerRef.current);
-          handleComplete();
+          handleCompleteRef.current();
           return 0;
         }
         return prev - 1;
@@ -109,7 +131,6 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running]);
 
   const handleComplete = () => {
@@ -136,6 +157,11 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
     }
   };
 
+  // Refresh the ref every render so the running timer always calls the latest version.
+  useEffect(() => {
+    handleCompleteRef.current = handleComplete;
+  });
+
   const toggle = () => setRunning(r => !r);
 
   const reset = () => {
@@ -151,7 +177,7 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
 
   const saveSettings = (s: Settings) => {
     setSettings(s);
-    ls.set("pomodoro_settings_v1", JSON.stringify(s));
+    ls.set(SETTINGS_KEY, JSON.stringify(s));
     setShowSettings(false);
   };
 
@@ -195,22 +221,26 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
           </button>
         </div>
 
-        {/* Mode switcher */}
+        {/* Mode switcher — animated sliding pill */}
         <div className="su1 glass-card" style={{ borderRadius: 22 }}>
-          <div className="p-2 flex gap-1">
+          <div className="mode-rail" style={{ position: "relative", padding: 6 }}>
+            <div
+              className="mode-pill"
+              aria-hidden
+              style={{
+                left: `calc(6px + (100% - 12px) * ${["focus", "shortBreak", "longBreak"].indexOf(mode)} / 3)`,
+                width: "calc((100% - 12px) / 3)",
+              }} />
             {([
               { id: "focus", label: "focus" },
               { id: "shortBreak", label: "short" },
               { id: "longBreak", label: "long" },
             ] as const).map(({ id, label }) => (
               <button key={id} onClick={() => switchMode(id)}
-                className="flex-1 py-2 rounded-2xl text-[12px] font-semibold transition-all"
+                className="mode-tab"
                 style={{
-                  background: mode === id ? "linear-gradient(135deg, #7654A8, #A870D8)" : "transparent",
                   color: mode === id ? "white" : "var(--text-muted)",
-                  border: "none",
-                  cursor: "pointer",
-                  boxShadow: mode === id ? "0 4px 14px rgba(120,80,190,.28)" : "none",
+                  fontWeight: mode === id ? 700 : 600,
                 }}>
                 {label}
               </button>
@@ -224,9 +254,9 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
             <p className="text-[11px] uppercase tracking-[2px] mb-1" style={{ color: "var(--text-muted)" }}>
               {modeLabel}
             </p>
-            <span className="text-[20px] mb-2 float">{modeEmoji}</span>
+            <span key={mode} className="text-[20px] mb-2 mode-emoji-pop">{modeEmoji}</span>
 
-            <div className="relative" style={{ width: ringSize, height: ringSize }}>
+            <div className={`relative timer-ring ${running ? "is-running" : ""}`} style={{ width: ringSize, height: ringSize }}>
               <svg width={ringSize} height={ringSize} style={{ transform: "rotate(-90deg)" }}>
                 <circle
                   cx={ringSize / 2} cy={ringSize / 2} r={ringRadius}
@@ -342,7 +372,9 @@ function SettingsModal({
   const [draft, setDraft] = useState<Settings>(settings);
 
   const update = (k: keyof Settings, v: number) => {
-    setDraft(d => ({ ...d, [k]: Math.max(1, Math.min(120, v)) }));
+    // focus & breaks: 1–180min, cycles: 1–10
+    const max = k === "cyclesBeforeLong" ? 10 : 180;
+    setDraft(d => ({ ...d, [k]: Math.max(1, Math.min(max, v)) }));
   };
 
   return (

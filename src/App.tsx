@@ -372,7 +372,7 @@ export default function PurpleDashboard() {
     refreshStorageBytes();
   };
 
-  useEffect(() => { if (showSettings) refreshStorageBytes(); }, [showSettings]);
+  useEffect(() => { if (showSettings) refreshStorageBytes(); }, [showSettings]); // eslint-disable-line react-hooks/set-state-in-effect
 
   const dismissOnboarding = () => {
     ls.set("onboarded_v1", "true");
@@ -824,7 +824,7 @@ export default function PurpleDashboard() {
               </div>
               {MOODS.map(({ label, emoji }) => (
                 <div key={label} onClick={() => toggleMood(label)}
-                  className="interactive-option flex items-center gap-1.5 mb-1.5 cursor-pointer px-1.5 py-0.5 rounded-xl"
+                  className={`option-chip interactive-option flex items-center gap-1.5 mb-1.5 cursor-pointer px-1.5 py-0.5 rounded-xl ${moods.includes(label) ? "is-selected" : ""}`}
                   style={{ background: moods.includes(label) ? "var(--accent-soft)" : "transparent" }}>
                   <span className="text-xs leading-none">{moods.includes(label) ? "💜" : "🤍"}</span>
                   <span className={`text-[11px] flex-1 ${moods.includes(label) ? "text-[#7654A8] font-semibold" : "text-[#9685B0]"}`}>{label}</span>
@@ -953,7 +953,7 @@ export default function PurpleDashboard() {
               }}
               className="bg-transparent border-none cursor-pointer flex flex-col items-center"
               style={{ opacity: active ? 1 : .42, transform: active ? "translate3d(0,-3px,0)" : "none", padding: "4px 14px", transition: "transform .18s var(--t-bezier), opacity .18s ease" }}>
-              <span style={{ fontSize: active ? 26 : 21, transition: "font-size .18s ease" }}>{icon}</span>
+              <span className="nav-icon" style={{ fontSize: active ? 26 : 21, transform: active ? "scale(1.06)" : "scale(1)" }}>{icon}</span>
               {active && <span className="nav-indicator" aria-hidden />}
             </button>
           );
