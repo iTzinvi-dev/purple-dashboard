@@ -663,9 +663,9 @@ export default function PurpleDashboard() {
           <GL radius={26}>
             <div className="p-[18px]">
               <div className="flex gap-3 items-center mb-4">
-                <div className="shimmer-bg w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">🎵</div>
+                <div className={`shimmer-bg music-icon-tile w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0${playing ? " is-playing" : ""}`}>🎵</div>
                 <div className="overflow-hidden flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-[#261B40] truncate">{audioLibrary[curIdx]?.title ?? "your audio library"}</p>
+                  <p key={audioLibrary[curIdx]?.id ?? "empty"} className="music-track-title text-xs font-semibold text-[#261B40] truncate">{audioLibrary[curIdx]?.title ?? "your audio library"}</p>
                   <p className="text-[10px] text-[#9685B0] mt-0.5">{audioLibrary.length ? `${audioLibrary.length} track${audioLibrary.length !== 1 ? "s" : ""}` : "tap ▶ to open library"}</p>
                 </div>
                 <button onClick={() => setShowPlaylist(true)}
@@ -673,10 +673,10 @@ export default function PurpleDashboard() {
               </div>
 
               <div ref={seekRef} onClick={seekAudio}
-                className="h-[3px] bg-[#DDD3F0] rounded-full mb-1.5 cursor-pointer relative">
+                className={`music-progress h-[3px] bg-[#DDD3F0] rounded-full mb-1.5 cursor-pointer relative${playing ? " is-playing" : ""}`}>
                 <div className="absolute inset-0 rounded-full transition-[width] duration-300"
                   style={{ width: `${duration ? (progress/duration)*100 : 6}%`, background: "linear-gradient(90deg, #7654A8, #B07ADE)" }}>
-                  <div className="absolute -right-[5px] -top-[4px] w-[11px] h-[11px] rounded-full bg-[#7654A8]"
+                  <div className="music-progress-thumb absolute -right-[5px] -top-[4px] w-[11px] h-[11px] rounded-full bg-[#7654A8]"
                     style={{ boxShadow: "0 0 0 2.5px white, 0 2px 6px rgba(100,60,160,.35)" }} />
                 </div>
               </div>
@@ -686,13 +686,13 @@ export default function PurpleDashboard() {
 
               <div className="flex items-center justify-around">
                 <button onClick={() => skip(-1)}
-                  className="bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 icon-button">⏮</button>
+                  className="music-skip-prev bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 icon-button">⏮</button>
                 <button onClick={togglePlay}
-                  className="w-11 h-11 rounded-full text-lg flex items-center justify-center flex-shrink-0 btn-purple icon-button shimmer-press">
+                  className={`music-play-btn w-11 h-11 rounded-full text-lg flex items-center justify-center flex-shrink-0 btn-purple icon-button shimmer-press${playing ? " is-playing" : ""}`}>
                   {playing ? "⏸" : "▶"}
                 </button>
                 <button onClick={() => skip(1)}
-                  className="bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 icon-button">⏭</button>
+                  className="music-skip-next bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 icon-button">⏭</button>
                 <button onClick={() => setShowPlaylist(true)}
                   className="bg-transparent border-none cursor-pointer text-[#B49FD0] text-base p-1 icon-button">🎼</button>
               </div>
@@ -934,8 +934,8 @@ export default function PurpleDashboard() {
                 else if (id === "star")   setOverlayPage("star");
                 else                      setOverlayPage(null);
               }}
-              className="bg-transparent border-none cursor-pointer flex flex-col items-center"
-              style={{ opacity: active ? 1 : .42, transform: active ? "translate3d(0,-3px,0)" : "none", padding: "4px 14px", transition: "transform .18s var(--t-bezier), opacity .18s ease" }}>
+              className="nav-button bg-transparent border-none cursor-pointer flex flex-col items-center"
+              style={{ opacity: active ? 1 : .42, transform: active ? "translate3d(0,-3px,0)" : "none", padding: "4px 14px" }}>
               <span className="nav-icon" style={{ fontSize: active ? 26 : 21, transform: active ? "scale(1.06)" : "scale(1)" }}>{icon}</span>
               {active && <span className="nav-indicator" aria-hidden />}
             </button>

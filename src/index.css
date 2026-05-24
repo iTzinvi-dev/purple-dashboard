@@ -651,3 +651,79 @@ button .ripple {
 @media (prefers-reduced-motion: reduce) {
   .pwa-toast { animation: none !important; }
 }
+
+
+/* ───────────── Music player — animations when active ───────────── */
+
+/* The gradient tile holding the 🎵 emoji breathes gently while audio is
+   playing. Static when paused so the card feels calm. */
+.music-icon-tile {
+  transition: transform 0.4s var(--t-bezier), box-shadow 0.4s ease;
+}
+.music-icon-tile.is-playing {
+  animation: musicTileBreathe 2.6s ease-in-out infinite;
+  box-shadow: 0 6px 18px rgba(140, 90, 200, 0.35);
+  will-change: transform, box-shadow;
+}
+@keyframes musicTileBreathe {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.06) rotate(3deg); }
+}
+
+/* Soft purple halo behind the play/pause button while playing. Mirrors the
+   productivity timer's "is-running" pulse so the two ideas feel related. */
+.music-play-btn { position: relative; isolation: isolate; }
+.music-play-btn::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(140, 90, 200, 0.55), transparent 65%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+  pointer-events: none;
+}
+.music-play-btn.is-playing::before {
+  opacity: 1;
+  animation: musicPlayPulse 1.7s ease-in-out infinite;
+}
+@keyframes musicPlayPulse {
+  0%, 100% { transform: scale(0.94); opacity: 0.55; }
+  50%      { transform: scale(1.1);  opacity: 0.95; }
+}
+
+/* Track title fade+slide whenever the current track changes. Driven by a
+   keyed remount in JSX (key={track.id}), so paused/playing state itself
+   doesn't retrigger it — only an actual track change does. */
+@keyframes trackTitleEnter {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.music-track-title {
+  animation: trackTitleEnter 0.32s var(--t-bezier) both;
+}
+
+/* Skip buttons get a friendlier press: scale+nudge in the skip direction. */
+.music-skip-prev:active { transform: translate3d(-2px, 0, 0) scale(0.92); }
+.music-skip-next:active { transform: translate3d( 2px, 0, 0) scale(0.92); }
+
+/* Progress thumb breathes very subtly while playing so the bar feels alive
+   even on quiet tracks. */
+.music-progress-thumb { transition: transform 0.3s var(--t-bezier); }
+.music-progress.is-playing .music-progress-thumb {
+  animation: thumbBreathe 1.8s ease-in-out infinite;
+}
+@keyframes thumbBreathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-icon-tile.is-playing,
+  .music-play-btn.is-playing::before,
+  .music-track-title,
+  .music-progress.is-playing .music-progress-thumb {
+    animation: none !important;
+  }
+}
