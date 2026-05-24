@@ -1,22 +1,16 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import PetalCanvas from "./PetalCanvas";
 import { approximateBytes, clearAll, formatBytes } from "./storage";
-import {
-  downloadJsonBackup,
-  importJsonFile,
-  isDriveConfigured,
-  uploadToDrive,
-  restoreFromDrive,
-  signOutOfDrive,
-} from "./backup";
+import { downloadJsonBackup, importJsonFile } from "./backup";
 
-// Lazy-load heavy page components so initial dashboard renders fast
+// Lazy-load page components — initial dashboard renders fast.
 const NotesPage        = lazy(() => import("./NotesPage"));
 const AudioNotesPage   = lazy(() => import("./AudioNotesPage"));
 const ProductivityPage = lazy(() => import("./ProductivityPage"));
+const StarPage         = lazy(() => import("./StarPage"));
 
 const PageFallback = () => (
-  <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%)" }}>
+  <div className="page-surface" style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
     <span style={{ fontSize: 28 }} className="breathe">💜</span>
   </div>
 );
@@ -51,11 +45,7 @@ const DEFAULT_TODOS = [
   { id: 6, text: "be proud of yourself", done: false },
 ];
 
-interface Weather {
-  temp: number;
-  desc: string;
-  icon: string;
-}
+interface Weather { temp: number; desc: string; icon: string; }
 
 const getJson = <T,>(key: string, fallback: T): T => {
   try {
@@ -63,9 +53,7 @@ const getJson = <T,>(key: string, fallback: T): T => {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+  } catch { return fallback; }
 };
 
 const getString = (key: string, fallback: string): string => {
@@ -73,9 +61,7 @@ const getString = (key: string, fallback: string): string => {
     if (typeof window === "undefined") return fallback;
     const raw = localStorage.getItem(key);
     return raw === null ? fallback : raw;
-  } catch {
-    return fallback;
-  }
+  } catch { return fallback; }
 };
 
 const ls = {
@@ -87,7 +73,7 @@ const fmt = (s: number) =>
   `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 const Bow = ({ size = 28, color = "#C4A8E0" }) => (
-  <svg width={size} height={size * 0.6} viewBox="0 0 60 36" fill="none">
+  <svg width={size} height={size * 0.6} viewBox="0 0 60 36" fill="none" aria-hidden>
     <path d="M30 18 C20 8, 2 4, 2 18 C2 28, 20 28, 30 18Z" fill={color} opacity=".9"/>
     <path d="M30 18 C40 8, 58 4, 58 18 C58 28, 40 28, 30 18Z" fill={color} opacity=".9"/>
     <circle cx="30" cy="18" r="4" fill={color}/>
@@ -97,17 +83,18 @@ const Bow = ({ size = 28, color = "#C4A8E0" }) => (
 );
 
 const Spark = ({ size = 11, color = "#C4A8E0", cls = "twinkle" }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" className={cls}
+  <svg width={size} height={size} viewBox="0 0 24 24" className={cls} aria-hidden
     style={{ display: "inline-block", flexShrink: 0 }}>
     <path d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z" fill={color}/>
   </svg>
 );
 
-const GL = ({ children, radius = 26 }: { children: React.ReactNode; radius?: number; mode?: string }) => (
-  <div className="glass-card" style={{ borderRadius: radius }}>
-    {children}
-  </div>
+const GL = ({ children, radius = 26 }: { children: React.ReactNode; radius?: number }) => (
+  <div className="glass-card" style={{ borderRadius: radius }}>{children}</div>
 );
+
+type Overlay = null | "notes" | "audio" | "productivity" | "star";
+
 export default function PurpleDashboard() {
   const [time, setTime] = useState(new Date());
   const name = "Pemii";
@@ -128,7 +115,10 @@ export default function PurpleDashboard() {
   const [progress,     setProgress]     = useState(0);
   const [saved,        setSaved]        = useState(false);
   const [activeTab,    setActiveTab]    = useState("home");
-  const [overlayPage,  setOverlayPage]  = useState<null | "notes" | "audio" | "productivity">(null);
+  const [overlayPage,  setOverlayPage]  = useState<Overlay>(null);
+
+  // Onboarding — only ever shown once, when "onboarded_v1" is missing.
+  const [showOnboarding, setShowOnboarding] = useState(() => ls.get("onboarded_v1") !== "true");
 
   // Settings panel
   const [settingsTab,    setSettingsTab]    = useState<"appearance" | "backup" | "privacy">("appearance");
@@ -139,6 +129,13 @@ export default function PurpleDashboard() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [storageBytes,   setStorageBytes]   = useState(0);
   const importFileRef = useRef<HTMLInputElement>(null);
+
+  // PWA install prompt
+  const [installEvent, setInstallEvent] = useState<{ prompt: () => Promise<void> } | null>(null);
+  const [showInstallPill, setShowInstallPill] = useState(false);
+
+  // Online/offline status
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileRef  = useRef<HTMLInputElement>(null);
@@ -151,36 +148,17 @@ export default function PurpleDashboard() {
     return () => clearInterval(t);
   }, []);
 
+  // Weather (best effort, single fetch on mount)
   useEffect(() => {
     const codeMap: Record<number, { icon: string; desc: string }> = {
-      0: { icon: "☀️", desc: "clear sky" },
-      1: { icon: "🌤️", desc: "mainly clear" },
-      2: { icon: "⛅", desc: "partly cloudy" },
-      3: { icon: "☁️", desc: "overcast" },
-      45: { icon: "🌫️", desc: "fog" },
-      48: { icon: "🌫️", desc: "depositing rime fog" },
-      51: { icon: "🌦️", desc: "light drizzle" },
-      53: { icon: "🌦️", desc: "moderate drizzle" },
-      55: { icon: "🌧️", desc: "dense drizzle" },
-      56: { icon: "🌧️", desc: "freezing drizzle" },
-      57: { icon: "🌧️", desc: "freezing drizzle" },
-      61: { icon: "🌧️", desc: "light rain" },
-      63: { icon: "🌧️", desc: "moderate rain" },
-      65: { icon: "🌧️", desc: "heavy rain" },
-      66: { icon: "🌧️", desc: "freezing rain" },
-      67: { icon: "🌧️", desc: "heavy freezing rain" },
-      71: { icon: "❄️", desc: "snow fall" },
-      73: { icon: "❄️", desc: "snow fall" },
-      75: { icon: "❄️", desc: "snow fall" },
-      77: { icon: "❄️", desc: "snow grains" },
-      80: { icon: "🌧️", desc: "rain showers" },
-      81: { icon: "🌧️", desc: "moderate showers" },
-      82: { icon: "🌧️", desc: "violent showers" },
-      85: { icon: "❄️", desc: "snow showers" },
-      86: { icon: "❄️", desc: "heavy snow showers" },
+      0: { icon: "☀️", desc: "clear sky" }, 1: { icon: "🌤️", desc: "mainly clear" },
+      2: { icon: "⛅", desc: "partly cloudy" }, 3: { icon: "☁️", desc: "overcast" },
+      45: { icon: "🌫️", desc: "fog" }, 48: { icon: "🌫️", desc: "fog" },
+      51: { icon: "🌦️", desc: "light drizzle" }, 53: { icon: "🌦️", desc: "drizzle" },
+      55: { icon: "🌧️", desc: "drizzle" }, 61: { icon: "🌧️", desc: "light rain" },
+      63: { icon: "🌧️", desc: "rain" }, 65: { icon: "🌧️", desc: "heavy rain" },
+      71: { icon: "❄️", desc: "snow" }, 80: { icon: "🌧️", desc: "showers" },
       95: { icon: "⛈️", desc: "thunderstorm" },
-      96: { icon: "⛈️", desc: "thunderstorm" },
-      99: { icon: "⛈️", desc: "thunderstorm" },
     };
 
     const updateWeather = async (lat: number, lon: number) => {
@@ -193,11 +171,8 @@ export default function PurpleDashboard() {
           const mapped = codeMap[current.weathercode] ?? { icon: "🌤️", desc: "weather" };
           setWeather({ temp: Math.round(current.temperature), desc: mapped.desc, icon: mapped.icon });
         }
-      } catch {
-        setWeather(null);
-      } finally {
-        setWeatherLoading(false);
-      }
+      } catch { setWeather(null); }
+      finally { setWeatherLoading(false); }
     };
 
     const fallback = () => updateWeather(23.8, 90.4);
@@ -205,17 +180,63 @@ export default function PurpleDashboard() {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => updateWeather(coords.latitude, coords.longitude),
         fallback,
+        { timeout: 6000 },
       );
-    } else {
-      fallback();
-    }
+    } else { fallback(); }
   }, []);
 
+  // Dark-mode side-effect on <html>
   useEffect(() => {
     if (typeof document === "undefined") return;
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
+  // PWA lifecycle toasts
+  const [pwaToast, setPwaToast] = useState<null | { kind: "ready" | "update"; msg: string }>(null);
+  useEffect(() => {
+    const onReady = () => {
+      setPwaToast({ kind: "ready", msg: "offline ready 💜 your space works without wifi" });
+      setTimeout(() => setPwaToast(null), 4500);
+    };
+    const onUpdate = () => {
+      setPwaToast({ kind: "update", msg: "fresh updates ready — refresh anytime ✨" });
+      setTimeout(() => setPwaToast(null), 6000);
+    };
+    window.addEventListener("pwa-offline-ready", onReady);
+    window.addEventListener("pwa-update-available", onUpdate);
+    return () => {
+      window.removeEventListener("pwa-offline-ready", onReady);
+      window.removeEventListener("pwa-update-available", onUpdate);
+    };
+  }, []);
+
+  // Online/offline tracking
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  // PWA install prompt capture
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallEvent(e as unknown as { prompt: () => Promise<void> });
+      // Show pill once after small delay if user hasn't dismissed before
+      if (ls.get("install_dismissed_v1") !== "true") {
+        setTimeout(() => setShowInstallPill(true), 8000);
+      }
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  // Lightweight ripple effect on every button (no per-button setup)
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
@@ -225,20 +246,21 @@ export default function PurpleDashboard() {
 
       const rect = button.getBoundingClientRect();
       const ripple = document.createElement("span");
-      const size = Math.max(rect.width, rect.height) * 1.8;
+      const size = Math.max(rect.width, rect.height) * 1.7;
       ripple.className = "ripple";
       ripple.style.width = `${size}px`;
       ripple.style.height = `${size}px`;
       ripple.style.left = `${event.clientX - rect.left - size / 2}px`;
       ripple.style.top = `${event.clientY - rect.top - size / 2}px`;
       button.appendChild(ripple);
-      window.setTimeout(() => { ripple.remove(); }, 600);
+      window.setTimeout(() => { ripple.remove(); }, 500);
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
+  // Music playlist plumbing
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !playlist[curIdx]) return;
@@ -256,7 +278,7 @@ export default function PurpleDashboard() {
       audio.src = playlist[curIdx].url;
       audio.load();
     }
-    if (playing) { audio.pause(); }
+    if (playing) audio.pause();
     else { try { await audio.play(); } catch { void 0; } }
   };
 
@@ -310,26 +332,22 @@ export default function PurpleDashboard() {
     setShowSettings(false);
   };
 
-  // ── Backup / Restore handlers ──
+  // ── Backup / Restore ──
   const refreshStorageBytes = () => setStorageBytes(approximateBytes().total);
 
   const flashMsg = (msg: string) => {
-    setBackupMsg(msg);
-    setBackupErr(null);
+    setBackupMsg(msg); setBackupErr(null);
     window.setTimeout(() => setBackupMsg(null), 4000);
   };
   const flashErr = (err: unknown) => {
     const msg = err instanceof Error ? err.message : "something went wrong";
-    setBackupErr(msg);
-    setBackupMsg(null);
+    setBackupErr(msg); setBackupMsg(null);
     window.setTimeout(() => setBackupErr(null), 6000);
   };
 
   const onExportFile = () => {
-    try {
-      downloadJsonBackup();
-      flashMsg("backup file downloaded 💜");
-    } catch (e) { flashErr(e); }
+    try { downloadJsonBackup(); flashMsg("backup file downloaded 💜"); }
+    catch (e) { flashErr(e); }
   };
 
   const onImportFilePick = () => importFileRef.current?.click();
@@ -343,28 +361,6 @@ export default function PurpleDashboard() {
       const result = await importJsonFile(file, importMode);
       flashMsg(`imported ${result.applied} item${result.applied === 1 ? "" : "s"} — refresh to see changes`);
       refreshStorageBytes();
-    } catch (e) {
-      flashErr(e);
-    } finally {
-      setBackupBusy(null);
-    }
-  };
-
-  const onDriveBackup = async () => {
-    setBackupBusy("uploading to Google Drive...");
-    try {
-      const { bytes } = await uploadToDrive();
-      flashMsg(`backed up to Drive (${formatBytes(bytes)}) 💜`);
-    } catch (e) { flashErr(e); }
-    finally { setBackupBusy(null); }
-  };
-
-  const onDriveRestore = async () => {
-    setBackupBusy("restoring from Google Drive...");
-    try {
-      const result = await restoreFromDrive(importMode);
-      flashMsg(`restored ${result.applied} items from ${new Date(result.exportedAt).toLocaleString()}`);
-      refreshStorageBytes();
     } catch (e) { flashErr(e); }
     finally { setBackupBusy(null); }
   };
@@ -376,27 +372,38 @@ export default function PurpleDashboard() {
     refreshStorageBytes();
   };
 
-  // Refresh storage usage whenever settings opens
-  useEffect(() => {
-    if (showSettings) refreshStorageBytes();
-  }, [showSettings]);
+  useEffect(() => { if (showSettings) refreshStorageBytes(); }, [showSettings]);
 
+  const dismissOnboarding = () => {
+    ls.set("onboarded_v1", "true");
+    setShowOnboarding(false);
+  };
+
+  const promptInstall = async () => {
+    if (!installEvent) return;
+    try { await installEvent.prompt(); } catch { /* ignore */ }
+    setShowInstallPill(false);
+    setInstallEvent(null);
+  };
+  const dismissInstall = () => {
+    ls.set("install_dismissed_v1", "true");
+    setShowInstallPill(false);
+  };
 
   const h        = time.getHours();
   const greeting = h < 5 ? "sweet dreams" : h < 12 ? "good morning" : h < 17 ? "good afternoon" : h < 21 ? "good evening" : "good night";
   const timeStr  = time.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
   const dateStr  = time.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
   return (
     <div className="min-h-screen pb-24"
       style={{
-        background: darkMode
-          ? "radial-gradient(circle at top, rgba(135, 90, 190, 0.34), transparent 35%), linear-gradient(180deg, #17082E 0%, #0F0620 100%)"
-          : "linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%)",
-        fontFamily: "'DM Sans', system-ui, sans-serif",
-        color: darkMode ? "#F4E8FF" : "#261B40",
+        background: "var(--bg-app)",
+        color: "var(--text-primary)",
       }}>
 
       <PetalCanvas />
+
       <audio ref={audioRef}
         onTimeUpdate={() => setProgress(audioRef.current?.currentTime ?? 0)}
         onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
@@ -406,7 +413,63 @@ export default function PurpleDashboard() {
       />
       <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={handleFiles} />
 
-      {/* Settings Modal — Appearance / Backup / Privacy */}
+      {/* Offline banner */}
+      {!isOnline && (
+        <div className="offline-banner">
+          🌙 you're offline — your space still works, weather will be back soon
+        </div>
+      )}
+
+      {/* PWA lifecycle toast (offline ready / update available) */}
+      {pwaToast && (
+        <div className="pwa-toast" role="status">
+          {pwaToast.msg}
+        </div>
+      )}
+
+      {/* Onboarding (first-launch only) */}
+      {showOnboarding && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-5 overlay-bg"
+          style={{ background: "rgba(35,18,65,.78)", backdropFilter: "blur(18px)" }}>
+          <div className="onboard-card glass-card" style={{ borderRadius: 32, maxWidth: 360, width: "100%" }}>
+            <div style={{ padding: "32px 28px 28px", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 14 }}>
+                <Spark size={14} color="#B49FD0" cls="twinkle" />
+                <span style={{ fontSize: 30 }} className="float">💜</span>
+                <Spark size={14} color="#C4A8E0" cls="twinkle2" />
+              </div>
+              <h2 className="shimmer-text"
+                style={{ margin: 0, fontSize: 28, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", fontWeight: 600 }}>
+                Welcome, Pemii
+              </h2>
+              <p style={{ margin: "16px 0 0", fontSize: 15, lineHeight: 1.7, color: "var(--text-secondary)", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+                This space was made just for you<br />
+                Your little world.
+              </p>
+              <p style={{ margin: "14px 0 22px", fontSize: 14, lineHeight: 1.7, color: "var(--text-primary)" }}>
+                If anything feels off, you know who to call <span style={{ display: "inline-block" }} className="float">🎀</span><br />
+                <span style={{ color: "var(--accent)", fontWeight: 600, fontStyle: "italic" }}>He'll fix it, always.</span>
+              </p>
+              <button onClick={dismissOnboarding}
+                className="btn-purple shimmer-press"
+                style={{ borderRadius: 18, padding: "12px 30px", fontSize: 14, fontWeight: 600 }}>
+                begin 💜
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PWA install pill */}
+      {showInstallPill && installEvent && !showOnboarding && (
+        <div className="install-pill">
+          <span>✨ install for offline access</span>
+          <button onClick={promptInstall}>install</button>
+          <button onClick={dismissInstall} aria-label="dismiss" style={{ padding: "4px 10px" }}>✕</button>
+        </div>
+      )}
+
+      {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 overlay-bg"
           style={{ background: "rgba(35,18,65,.55)", backdropFilter: "blur(14px)" }}
@@ -421,7 +484,6 @@ export default function PurpleDashboard() {
                 style={{ color: "var(--text-muted)" }}>✕</button>
             </div>
 
-            {/* Tabs */}
             <div className="flex px-4 pt-2" style={{ gap: 4 }}>
               {(["appearance", "backup", "privacy"] as const).map(t => (
                 <button key={t} onClick={() => setSettingsTab(t)}
@@ -433,7 +495,6 @@ export default function PurpleDashboard() {
 
             <div className="px-6 py-5" style={{ overflowY: "auto" }}>
 
-              {/* APPEARANCE */}
               {settingsTab === "appearance" && (
                 <div className="flex flex-col gap-4">
                   <div className="p-4 rounded-3xl"
@@ -468,11 +529,8 @@ export default function PurpleDashboard() {
                 </div>
               )}
 
-              {/* BACKUP */}
               {settingsTab === "backup" && (
                 <div className="flex flex-col gap-4">
-
-                  {/* Local file */}
                   <div className="p-4 rounded-3xl"
                     style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)" }}>
                     <p className="text-[11px] font-semibold uppercase tracking-widest mb-2"
@@ -489,48 +547,11 @@ export default function PurpleDashboard() {
                     <input ref={importFileRef} type="file" accept="application/json,.json" hidden onChange={onImportFile} />
                   </div>
 
-                  {/* Google Drive */}
-                  <div className="p-4 rounded-3xl"
-                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)" }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-widest"
-                        style={{ color: "var(--text-muted)" }}>google drive</p>
-                      <span className="text-[10px]" style={{ color: isDriveConfigured() ? "var(--accent)" : "var(--text-faint)" }}>
-                        {isDriveConfigured() ? "ready" : "not configured"}
-                      </span>
-                    </div>
-                    {isDriveConfigured() ? (
-                      <>
-                        <p className="text-[11px] mb-3" style={{ color: "var(--text-faint)" }}>
-                          saves to a private app folder you can't see in Drive — only this app can read it.
-                        </p>
-                        <div className="flex gap-2">
-                          <button onClick={onDriveBackup} disabled={!!backupBusy}
-                            className="flex-1 btn-purple shimmer-press"
-                            style={{ borderRadius: 14, padding: "10px 14px", fontSize: 13, fontWeight: 600 }}>
-                            ☁ backup now
-                          </button>
-                          <button onClick={onDriveRestore} disabled={!!backupBusy}
-                            className="flex-1 btn-soft">↻ restore</button>
-                        </div>
-                        <button onClick={() => { signOutOfDrive(); flashMsg("signed out of Google Drive"); }}
-                          className="w-full mt-2 text-[10px] underline bg-transparent border-none cursor-pointer"
-                          style={{ color: "var(--text-faint)" }}>sign out</button>
-                      </>
-                    ) : (
-                      <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>
-                        set <code style={{ background: "var(--accent-soft)", padding: "1px 5px", borderRadius: 4, fontSize: 10 }}>VITE_GOOGLE_CLIENT_ID</code> at build time to enable.
-                        the local backup file works fine without it.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Import mode */}
                   <div className="p-3 rounded-2xl flex gap-1"
                     style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)" }}>
                     {(["merge", "replace"] as const).map(m => (
                       <button key={m} onClick={() => setImportMode(m)}
-                        className="flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all"
+                        className="flex-1 py-2 rounded-xl text-[11px] font-semibold"
                         style={{
                           background: importMode === m ? "linear-gradient(135deg, #7654A8, #A870D8)" : "transparent",
                           color: importMode === m ? "white" : "var(--text-muted)",
@@ -542,19 +563,16 @@ export default function PurpleDashboard() {
                     ))}
                   </div>
 
-                  {/* Storage usage */}
                   <p className="text-[10px] text-center" style={{ color: "var(--text-faint)" }}>
                     using {formatBytes(storageBytes)} of local storage
                   </p>
 
-                  {/* Status */}
                   {backupBusy && <div className="status-line">⏳ {backupBusy}</div>}
                   {backupMsg  && <div className="status-line">{backupMsg}</div>}
                   {backupErr  && <div className="status-line error">⚠ {backupErr}</div>}
                 </div>
               )}
 
-              {/* PRIVACY */}
               {settingsTab === "privacy" && (
                 <div className="flex flex-col gap-4">
                   <div className="p-4 rounded-3xl"
@@ -563,9 +581,6 @@ export default function PurpleDashboard() {
                       style={{ color: "var(--text-muted)" }}>your data is yours</p>
                     <ul className="text-[11px] leading-relaxed pl-4" style={{ color: "var(--text-secondary)", listStyle: "disc" }}>
                       <li>all notes, audio, and journal text stay <strong>on this device</strong> by default</li>
-                      <li>no analytics, no tracking, no ads</li>
-                      <li>weather uses your location only to fetch local weather; nothing is stored or sent anywhere else</li>
-                      <li>Google Drive backup (if you enable it) goes to a private folder only this app can read</li>
                       <li>uninstalling the app or clearing browser data will erase everything</li>
                     </ul>
                   </div>
@@ -600,32 +615,32 @@ export default function PurpleDashboard() {
 
       {/* Playlist Modal */}
       {showPlaylist && (
-        <div className="fixed inset-0 z-[300] flex items-end justify-center"
+        <div className="fixed inset-0 z-[300] flex items-end justify-center overlay-bg"
           style={{ background: "rgba(35,18,65,.52)", backdropFilter: "blur(14px)" }}
           onClick={e => e.target === e.currentTarget && setShowPlaylist(false)}>
-          <div className="w-full max-w-[430px] p-4 pb-8">
-            <GL radius={28} mode="prominent">
+          <div className="w-full max-w-[430px] p-4 pb-8 page-enter">
+            <GL radius={28}>
               <div className="p-6">
                 <div className="flex justify-between items-center mb-5">
-                  <h3 className="text-lg font-medium italic text-[#5A3E8A]" style={{ fontFamily: "var(--font-display)" }}>🎵 playlist</h3>
-                  <button onClick={() => setShowPlaylist(false)} className="text-[#9685B0] text-sm bg-transparent border-none cursor-pointer icon-button">close</button>
+                  <h3 className="text-lg font-medium italic" style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}>🎵 playlist</h3>
+                  <button onClick={() => setShowPlaylist(false)} className="text-sm bg-transparent border-none cursor-pointer icon-button" style={{ color: "var(--text-muted)" }}>close</button>
                 </div>
                 {playlist.length === 0 ? (
-                  <p className="text-[13px] text-[#9685B0] text-center py-4">no songs yet — tap ＋ to add 💜</p>
+                  <p className="text-[13px] text-center py-4" style={{ color: "var(--text-muted)" }}>no songs yet — tap ＋ to add 💜</p>
                 ) : (
                   <div className="max-h-64 overflow-y-auto flex flex-col gap-2">
                     {playlist.map((track, i) => (
-                      <div key={i} className="interactive-option flex items-center gap-3 p-3 rounded-2xl transition-all"
-                        style={{ background: i === curIdx ? "rgba(118,84,168,.15)" : "rgba(255,255,255,.3)" }}>
+                      <div key={i} className="interactive-option flex items-center gap-3 p-3 rounded-2xl"
+                        style={{ background: i === curIdx ? "var(--accent-soft)" : "var(--bg-input)" }}>
                         <button onClick={() => { setCurIdx(i); setShowPlaylist(false); }}
                           className="bg-transparent border-none cursor-pointer text-base p-0 leading-none icon-button">
                           {i === curIdx ? "💜" : "🤍"}
                         </button>
-                        <span className="flex-1 text-[12px] truncate" style={{ color: i === curIdx ? "#7654A8" : "#261B40", fontWeight: i === curIdx ? 600 : 400 }}>
+                        <span className="flex-1 text-[12px] truncate" style={{ color: i === curIdx ? "var(--accent)" : "var(--text-primary)", fontWeight: i === curIdx ? 600 : 400 }}>
                           {track.name}
                         </span>
                         <button onClick={() => removeSong(i)}
-                          className="bg-transparent border-none cursor-pointer text-[13px] text-[#C4A8E0] px-1 icon-button">✕</button>
+                          className="bg-transparent border-none cursor-pointer text-[13px] px-1 icon-button" style={{ color: "var(--text-faint)" }}>✕</button>
                       </div>
                     ))}
                   </div>
@@ -639,9 +654,10 @@ export default function PurpleDashboard() {
           </div>
         </div>
       )}
-      <div className="max-w-[430px] mx-auto px-3.5 pt-5 pb-2 flex flex-col gap-3">
 
-        {/* Header */}
+      {/* Dashboard */}
+      <div className="max-w-[430px] mx-auto px-3.5 pt-5 pb-2 flex flex-col gap-3 relative z-10">
+
         <div className="su0 flex justify-between items-start px-1">
           <div>
             <p className="text-xs text-[#9685B0] font-medium flex items-center gap-1.5">
@@ -652,29 +668,28 @@ export default function PurpleDashboard() {
             <p className="mt-1.5 text-[11px] text-[#B49FD0]">{dateStr}</p>
           </div>
           <button onClick={() => { setTempDarkMode(darkMode); setShowSettings(true); }}
+            aria-label="settings"
             className="w-10 h-10 flex items-center justify-center text-lg icon-button nav-button flex-shrink-0"
-            style={{ borderRadius: "50%", background: "rgba(255,255,255,0.55)", border: "1px solid rgba(255,255,255,0.88)", boxShadow: "0 2px 14px rgba(120,80,190,.1)" }}>⚙️</button>
+            style={{ borderRadius: "50%", background: "var(--bg-card-soft)", border: "1px solid var(--border-card)", boxShadow: "0 2px 14px rgba(120,80,190,.08)" }}>⚙️</button>
         </div>
 
-        {/* Row 1 — Music + Quote */}
+        {/* Music + Quote */}
         <div className="su1 grid gap-3" style={{ gridTemplateColumns: "1.45fr 1fr" }}>
-
-          {/* Music */}
           <GL radius={26}>
             <div className="p-[18px]">
               <div className="flex gap-3 items-center mb-4">
-                <div className="shimmer-bg w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 breathe">🎵</div>
+                <div className="shimmer-bg w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">🎵</div>
                 <div className="overflow-hidden flex-1 min-w-0">
                   <p className="text-xs font-semibold text-[#261B40] truncate">{playlist[curIdx]?.name ?? "city of stars"}</p>
                   <p className="text-[10px] text-[#9685B0] mt-0.5">{playlist.length ? `${playlist.length} track${playlist.length !== 1 ? "s" : ""}` : "dreamy playlist"}</p>
                 </div>
                 <button onClick={() => setShowPlaylist(true)}
-                  className="text-sm text-[#B49FD0] tracking-[3px] bg-transparent border-none cursor-pointer active:scale-90">···</button>
+                  className="text-sm text-[#B49FD0] tracking-[3px] bg-transparent border-none cursor-pointer">···</button>
               </div>
 
               <div ref={seekRef} onClick={seekAudio}
                 className="h-[3px] bg-[#DDD3F0] rounded-full mb-1.5 cursor-pointer relative">
-                <div className="absolute inset-0 rounded-full transition-[width] duration-500"
+                <div className="absolute inset-0 rounded-full transition-[width] duration-300"
                   style={{ width: `${duration ? (progress/duration)*100 : 6}%`, background: "linear-gradient(90deg, #7654A8, #B07ADE)" }}>
                   <div className="absolute -right-[5px] -top-[4px] w-[11px] h-[11px] rounded-full bg-[#7654A8]"
                     style={{ boxShadow: "0 0 0 2.5px white, 0 2px 6px rgba(100,60,160,.35)" }} />
@@ -701,7 +716,6 @@ export default function PurpleDashboard() {
             </div>
           </GL>
 
-          {/* Quote */}
           <GL radius={26}>
             <div className="p-5 flex flex-col items-center justify-center text-center h-full">
               <div className="float"><Bow size={28} color="#C4A8E0" /></div>
@@ -716,10 +730,10 @@ export default function PurpleDashboard() {
             </div>
           </GL>
         </div>
-        {/* Row 2 — Clock + Weather */}
-        <div className="su2 grid gap-3" style={{ gridTemplateColumns: "1.2fr 1fr" }}>
 
-          <GL radius={26} mode="prominent">
+        {/* Clock + Weather */}
+        <div className="su2 grid gap-3" style={{ gridTemplateColumns: "1.2fr 1fr" }}>
+          <GL radius={26}>
             <div className="px-5 py-6 text-center">
               <p className="font-semibold text-[#5A3E8A] leading-none tracking-[-2.5px]"
                 style={{ fontFamily: "var(--font-display)", fontSize: "44px" }}>{timeStr}</p>
@@ -747,14 +761,14 @@ export default function PurpleDashboard() {
               </>) : (<>
                 <span className="text-[32px] leading-none breathe">🌤️</span>
                 <p className="text-[10px] text-[#9685B0] mt-2.5 leading-relaxed">
-                  {weatherLoading ? "finding weather with location..." : "weather unavailable — allow location or refresh"}
+                  {weatherLoading ? "finding weather..." : isOnline ? "weather unavailable" : "offline"}
                 </p>
               </>)}
             </div>
           </GL>
         </div>
 
-        {/* Row 3 — Todo */}
+        {/* Todo */}
         <div className="su3">
           <GL radius={26}>
             <div className="p-5">
@@ -770,11 +784,11 @@ export default function PurpleDashboard() {
                       className={`heart-toggle ${t.done ? "heart-pop" : ""}`}>
                       {t.done ? "💜" : "🤍"}
                     </button>
-                    <span className={`flex-1 text-[13px] transition-all duration-200 ${t.done ? "line-through text-[#9685B0]" : "text-[#261B40]"}`}>
+                    <span className={`flex-1 text-[13px] ${t.done ? "line-through text-[#9685B0]" : "text-[#261B40]"}`}>
                       {t.text}
                     </span>
                     <button onClick={() => delTodo(t.id)}
-                      className="bg-transparent border-none cursor-pointer text-xs text-[#C4A8E0] px-1 active:scale-90">✕</button>
+                      className="bg-transparent border-none cursor-pointer text-xs text-[#C4A8E0] px-1">✕</button>
                   </div>
                 ))}
               </div>
@@ -789,9 +803,9 @@ export default function PurpleDashboard() {
             </div>
           </GL>
         </div>
-        {/* Row 4 — Break + Mood */}
-        <div className="su4 grid gap-3" style={{ gridTemplateColumns: "1fr 1.25fr" }}>
 
+        {/* Break + Mood */}
+        <div className="su4 grid gap-3" style={{ gridTemplateColumns: "1fr 1.25fr" }}>
           <GL radius={26}>
             <div className="p-6 flex flex-col items-center justify-center text-center">
               <span className="breathe text-[34px]">🕯️</span>
@@ -810,10 +824,10 @@ export default function PurpleDashboard() {
               </div>
               {MOODS.map(({ label, emoji }) => (
                 <div key={label} onClick={() => toggleMood(label)}
-                  className="interactive-option flex items-center gap-1.5 mb-1.5 cursor-pointer px-1.5 py-0.5 rounded-xl transition-all active:scale-95"
-                  style={{ background: moods.includes(label) ? "rgba(180,150,218,.16)" : "transparent" }}>
+                  className="interactive-option flex items-center gap-1.5 mb-1.5 cursor-pointer px-1.5 py-0.5 rounded-xl"
+                  style={{ background: moods.includes(label) ? "var(--accent-soft)" : "transparent" }}>
                   <span className="text-xs leading-none">{moods.includes(label) ? "💜" : "🤍"}</span>
-                  <span className={`text-[11px] flex-1 transition-colors ${moods.includes(label) ? "text-[#7654A8] font-semibold" : "text-[#9685B0]"}`}>{label}</span>
+                  <span className={`text-[11px] flex-1 ${moods.includes(label) ? "text-[#7654A8] font-semibold" : "text-[#9685B0]"}`}>{label}</span>
                   <span className="text-xs">{emoji}</span>
                 </div>
               ))}
@@ -821,9 +835,9 @@ export default function PurpleDashboard() {
           </GL>
         </div>
 
-        {/* Row 5 — Quote Banner */}
+        {/* Quote Banner */}
         <div className="su5">
-          <GL radius={26} mode="prominent">
+          <GL radius={26}>
             <div className="px-6 py-7 text-center">
               <span className="text-2xl text-[#B49FD0] leading-none block"
                 style={{ fontFamily: "var(--font-display)" }}>"</span>
@@ -838,7 +852,7 @@ export default function PurpleDashboard() {
           </GL>
         </div>
 
-        {/* Row 6 — Focus */}
+        {/* Focus */}
         <div className="su6">
           <GL radius={26}>
             <div className="px-5 py-5 flex items-center gap-4">
@@ -857,7 +871,7 @@ export default function PurpleDashboard() {
           </GL>
         </div>
 
-        {/* Row 7 — Journal */}
+        {/* Journal */}
         <div className="su7">
           <GL radius={26}>
             <div className="p-5">
@@ -867,7 +881,7 @@ export default function PurpleDashboard() {
                   <h3 className="text-[17px] font-medium italic text-[#261B40]"
                     style={{ fontFamily: "var(--font-display)" }}>my journal</h3>
                 </div>
-                <span className={`text-[11px] transition-colors duration-300 ${saved ? "text-[#7654A8] font-semibold" : "text-[#9685B0]"}`}>
+                <span className={`text-[11px] ${saved ? "text-[#7654A8] font-semibold" : "text-[#9685B0]"}`}>
                   {saved ? "saved 💜" : "auto save"}
                 </span>
               </div>
@@ -879,7 +893,7 @@ export default function PurpleDashboard() {
           </GL>
         </div>
 
-        {/* Row 8 — Soft Cards */}
+        {/* Soft Cards */}
         <div className="su8 grid grid-cols-2 gap-3">
           <GL radius={26}>
             <div className="p-6 text-center">
@@ -902,6 +916,7 @@ export default function PurpleDashboard() {
         <p className="text-center text-[11px] text-[#B49FD0] py-1">made with 💜 just for you</p>
       </div>
 
+      {/* Overlay pages */}
       {overlayPage && (
         <div className="fixed inset-0 z-[400] overlay-bg" style={{ background: "var(--bg-page)" }}>
           <div className="page-enter h-full">
@@ -909,6 +924,7 @@ export default function PurpleDashboard() {
               {overlayPage === "notes"        && <NotesPage onBack={() => { setOverlayPage(null); setActiveTab("home"); }} />}
               {overlayPage === "audio"        && <AudioNotesPage onBack={() => { setOverlayPage(null); setActiveTab("home"); }} />}
               {overlayPage === "productivity" && <ProductivityPage onBack={() => { setOverlayPage(null); setActiveTab("home"); }} />}
+              {overlayPage === "star"         && <StarPage onBack={() => { setOverlayPage(null); setActiveTab("home"); }} />}
             </Suspense>
           </div>
         </div>
@@ -918,7 +934,8 @@ export default function PurpleDashboard() {
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center pt-2.5 pb-[18px]"
         style={{
           background: "var(--bg-elevated)",
-          backdropFilter: "blur(18px)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
           borderTop: "1px solid var(--border-card)",
           boxShadow: "var(--shadow-elevated)",
         }}>
@@ -928,14 +945,15 @@ export default function PurpleDashboard() {
           return (
             <button key={id} onClick={() => {
                 setActiveTab(id);
-                if (id === "chat")       setOverlayPage("notes");
-                else if (id === "bow")   setOverlayPage("productivity");
-                else if (id === "music") setOverlayPage("audio");
-                else                     setOverlayPage(null);
+                if (id === "chat")        setOverlayPage("notes");
+                else if (id === "bow")    setOverlayPage("productivity");
+                else if (id === "music")  setOverlayPage("audio");
+                else if (id === "star")   setOverlayPage("star");
+                else                      setOverlayPage(null);
               }}
-              className="bg-transparent border-none cursor-pointer transition-all duration-200 flex flex-col items-center"
-              style={{ opacity: active ? 1 : .42, transform: active ? "translateY(-3px)" : "none", padding: "4px 14px" }}>
-              <span style={{ fontSize: active ? 26 : 21, transition: "font-size .2s" }}>{icon}</span>
+              className="bg-transparent border-none cursor-pointer flex flex-col items-center"
+              style={{ opacity: active ? 1 : .42, transform: active ? "translate3d(0,-3px,0)" : "none", padding: "4px 14px", transition: "transform .18s var(--t-bezier), opacity .18s ease" }}>
+              <span style={{ fontSize: active ? 26 : 21, transition: "font-size .18s ease" }}>{icon}</span>
               {active && <span className="nav-indicator" aria-hidden />}
             </button>
           );

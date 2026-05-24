@@ -13,6 +13,8 @@ export const STORAGE_KEYS = [
   "moods",                 // dashboard moods
   "journal",               // dashboard journal
   "darkMode",              // settings
+  "favorites_v1",          // favorites tab
+  "onboarded_v1",          // onboarding completion
 ] as const;
 
 export type BackupPayload = {
