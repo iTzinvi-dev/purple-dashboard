@@ -5,201 +5,7 @@
   --font-body: 'DM Sans', system-ui, sans-serif;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
-}
-@keyframes breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.07); }
-}
-@keyframes twinkle {
-  0%, 100% { opacity: 0.2; transform: scale(0.6); }
-  50% { opacity: 1; transform: scale(1.2); }
-}
-@keyframes glowPulse {
-  0%, 100% { box-shadow: 0 2px 22px rgba(118,84,168,0.07), 0 0 0 1px rgba(255,255,255,0.72); }
-  50% { box-shadow: 0 6px 36px rgba(118,84,168,0.22), 0 0 0 1px rgba(255,255,255,0.80), 0 0 22px rgba(180,150,220,0.18); }
-}
-@keyframes shimmer {
-  0% { background-position: -300% center; }
-  100% { background-position: 300% center; }
-}
-@keyframes ripple {
-  0% { transform: scale(0); opacity: 0.45; }
-  100% { transform: scale(2.4); opacity: 0; }
-}
-@keyframes heartPop {
-  0% { transform: scale(0.7); opacity: 0.4; }
-  50% { transform: scale(1.25); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-@keyframes iconTap {
-  0% { transform: scale(1) rotate(0deg); }
-  40% { transform: scale(0.93) rotate(-6deg); }
-  70% { transform: scale(1.05) rotate(3deg); }
-  100% { transform: scale(1) rotate(0deg); }
-}
-@keyframes shimmerSweep {
-  0% { transform: translateX(-120%); }
-  100% { transform: translateX(120%); }
-}
-@keyframes springUp {
-  0% { transform: translateY(0); }
-  30% { transform: translateY(-6px); }
-  55% { transform: translateY(2px); }
-  100% { transform: translateY(0); }
-}
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.su0 { animation: slideUp 0.48s ease both; }
-.su1 { animation: slideUp 0.48s ease 0.04s both; }
-.su2 { animation: slideUp 0.48s ease 0.09s both; }
-.su3 { animation: slideUp 0.48s ease 0.14s both; }
-.su4 { animation: slideUp 0.48s ease 0.19s both; }
-.su5 { animation: slideUp 0.48s ease 0.24s both; }
-.su6 { animation: slideUp 0.48s ease 0.29s both; }
-.su7 { animation: slideUp 0.48s ease 0.34s both; }
-.su8 { animation: slideUp 0.48s ease 0.39s both; }
-
-.float  { animation: float 3.8s ease-in-out infinite; }
-.float2 { animation: float 3.8s ease-in-out 0.6s infinite; }
-.float3 { animation: float 3.8s ease-in-out 1.2s infinite; }
-
-.breathe  { animation: breathe 3.6s ease infinite; }
-.breathe2 { animation: breathe 3.6s ease 0.7s infinite; }
-
-.twinkle  { animation: twinkle 2.2s ease infinite; }
-.twinkle2 { animation: twinkle 2.2s ease 0.7s infinite; }
-.twinkle3 { animation: twinkle 2.2s ease 1.4s infinite; }
-
-.shimmer-bg {
-  background: linear-gradient(90deg, #7654A8 0%, #B07ADE 40%, #C4A8E0 55%, #B07ADE 70%, #7654A8 100%);
-  background-size: 300% auto;
-  animation: shimmer 2.8s linear infinite;
-}
-
-.btn-purple {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, #7654A8, #A870D8);
-  box-shadow: 0 6px 20px rgba(120,80,190,0.32);
-  border: none;
-  color: white;
-  cursor: pointer;
-  transition: transform 0.18s, box-shadow 0.18s, background 0.18s, color 0.18s;
-}
-.btn-purple:hover { transform: translateY(-1px) scale(1.01); box-shadow: 0 9px 24px rgba(120,80,190,0.36); }
-.btn-purple:active { transform: scale(0.96); }
-
-button {
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
-}
-button:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(128,80,186,0.12); }
-button:active { transform: scale(0.94); }
-button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(135,90,190,0.18); }
-
-button .ripple {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(190, 144, 255, 0.28);
-  pointer-events: none;
-  transform: scale(0);
-  animation: ripple 0.55s ease-out;
-}
-
-.icon-button:active { animation: iconTap 0.35s ease-out; }
-
-.heart-toggle {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  min-width: 32px;
-  transition: transform 0.18s ease, color 0.18s ease;
-}
-.heart-pop { animation: heartPop 0.45s ease-out both; }
-
-.shimmer-press {
-  position: relative;
-  overflow: hidden;
-}
-.shimmer-press::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.24) 40%, rgba(255,255,255,0.42) 50%, transparent 60%);
-  transform: translateX(-120%);
-  transition: transform 0.45s ease;
-}
-.shimmer-press:active::before { transform: translateX(120%); }
-
-.icon-button {
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.nav-button:active { animation: springUp 0.35s ease-out; }
-
-.interactive-option {
-  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
-}
-.interactive-option:hover { transform: translateY(-1px); }
-.interactive-option:active { transform: scale(0.98); }
-
-.glass-card {
-  animation: glowPulse 8s ease-in-out infinite alternate;
-  transition: transform 0.35s ease, box-shadow 0.35s ease, background 0.35s ease;
-}
-.glass-card:hover { transform: translateY(-3px); box-shadow: 0 22px 64px rgba(120,80,190,0.14); }
-
-.todo-row:hover .del-btn { opacity: 1 !important; }
-
-::-webkit-scrollbar { width: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(170,140,210,.3); border-radius: 3px; }
-::placeholder { color: #C5B4DA; }
-input:focus, textarea:focus { outline: none; border-color: #C4A8E0 !important; }
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px);
-}
-
-.dark .glass-card {
-  background: rgba(18, 7, 46, 0.86);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.dark body {
-  background: #0b0320;
-  color: #f0e7ff;
-}
-
-.dark .btn-purple {
-  background: linear-gradient(135deg, #7B4FCE, #AE7EE8);
-}
-
-.dark input,
-.dark textarea {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: #f4e7ff;
-}
-
-.dark ::placeholder {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-
-/* ───────────── Theme variables ───────────── */
+/* ───────────── Theme tokens ───────────── */
 :root {
   --bg-app: linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%);
   --bg-page: linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%);
@@ -220,6 +26,11 @@ input:focus, textarea:focus { outline: none; border-color: #C4A8E0 !important; }
   --danger: #C4548A;
   --danger-bg: rgba(196, 84, 138, 0.1);
   --shadow-elevated: 0 -4px 28px rgba(118, 84, 168, 0.08);
+  --shadow-card: 0 4px 18px rgba(118, 84, 168, 0.08);
+  --shadow-card-hover: 0 10px 32px rgba(118, 84, 168, 0.18);
+  --t-fast: 0.16s;
+  --t-med: 0.22s;
+  --t-bezier: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 html.dark {
@@ -243,38 +54,224 @@ html.dark {
   --danger-bg: rgba(255, 143, 171, 0.12);
 }
 
-/* Page transitions */
-@keyframes pageEnter {
-  from { opacity: 0; transform: translateY(8px) scale(0.985); }
-  to   { opacity: 1; transform: translateY(0)   scale(1); }
+html, body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
-.page-enter { animation: pageEnter 0.3s ease both; will-change: transform, opacity; }
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(170,140,210,.3); border-radius: 3px; }
+.dark ::-webkit-scrollbar-thumb { background: rgba(180, 140, 230, 0.35); }
+::placeholder { color: #C5B4DA; }
+.dark ::placeholder { color: rgba(255, 255, 255, 0.55); }
+input:focus, textarea:focus { outline: none; border-color: #C4A8E0 !important; }
+
+input[type="file"]::-webkit-file-upload-button { display: none; }
+
+/* ───────────── ENTRANCE animations (one-shot, fast) ───────────── */
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.su0 { animation: slideUp 0.32s var(--t-bezier) both; will-change: transform, opacity; }
+.su1 { animation: slideUp 0.32s var(--t-bezier) 0.04s both; will-change: transform, opacity; }
+.su2 { animation: slideUp 0.32s var(--t-bezier) 0.07s both; will-change: transform, opacity; }
+.su3 { animation: slideUp 0.32s var(--t-bezier) 0.10s both; will-change: transform, opacity; }
+.su4 { animation: slideUp 0.32s var(--t-bezier) 0.13s both; will-change: transform, opacity; }
+.su5 { animation: slideUp 0.32s var(--t-bezier) 0.16s both; will-change: transform, opacity; }
+.su6 { animation: slideUp 0.32s var(--t-bezier) 0.19s both; will-change: transform, opacity; }
+.su7 { animation: slideUp 0.32s var(--t-bezier) 0.22s both; will-change: transform, opacity; }
+.su8 { animation: slideUp 0.32s var(--t-bezier) 0.25s both; will-change: transform, opacity; }
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translate3d(0, 6px, 0) scale(0.99); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+.page-enter { animation: pageEnter 0.18s var(--t-bezier) both; will-change: transform, opacity; }
 
 @keyframes overlayBg {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-.overlay-bg { animation: overlayBg 0.2s ease both; }
+.overlay-bg { animation: overlayBg 0.14s ease both; }
 
-/* Active nav indicator */
+/* ───────────── CONTINUOUS animations — only on idle elements, lightweight ───────────── */
+/* These run forever, so they're kept minimal (one transform property, no box-shadow, no background) */
+
+@keyframes float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -5px, 0); }
+}
+.float { animation: float 4.2s ease-in-out infinite; will-change: transform; }
+.float2 { animation: float 4.2s ease-in-out 0.6s infinite; will-change: transform; }
+.float3 { animation: float 4.2s ease-in-out 1.2s infinite; will-change: transform; }
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
+.breathe  { animation: breathe 3.2s ease infinite; will-change: transform; }
+.breathe2 { animation: breathe 3.2s ease 0.7s infinite; will-change: transform; }
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.7); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+.twinkle  { animation: twinkle 1.8s ease infinite; will-change: transform, opacity; }
+.twinkle2 { animation: twinkle 1.8s ease 0.6s infinite; will-change: transform, opacity; }
+.twinkle3 { animation: twinkle 1.8s ease 1.2s infinite; will-change: transform, opacity; }
+
+/* shimmer-bg simplified — no infinite background-position scroll (heavy on layout) */
+.shimmer-bg {
+  background: linear-gradient(135deg, #7654A8, #B07ADE);
+}
+
+/* ───────────── Cards — static shadow, only animate on hover (no constant glowPulse) ───────────── */
+
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--t-med) var(--t-bezier), box-shadow var(--t-med) var(--t-bezier);
+}
+
+.dark .glass-card {
+  background: rgba(28, 12, 56, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (hover: hover) {
+  .glass-card:hover {
+    transform: translate3d(0, -2px, 0);
+    box-shadow: var(--shadow-card-hover);
+  }
+}
+
+/* ───────────── Buttons — snappy, GPU-friendly press ───────────── */
+
+.btn-purple {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #7654A8, #A870D8);
+  box-shadow: 0 4px 14px rgba(120, 80, 190, 0.28);
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--t-bezier), box-shadow var(--t-fast) var(--t-bezier);
+}
+.btn-purple:hover  { transform: translate3d(0, -1px, 0); box-shadow: 0 6px 18px rgba(120, 80, 190, 0.34); }
+.btn-purple:active { transform: scale(0.96); }
+
+.dark .btn-purple { background: linear-gradient(135deg, #7B4FCE, #AE7EE8); }
+
+button {
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--t-fast) var(--t-bezier), background var(--t-fast) ease, color var(--t-fast) ease;
+}
+button:active { transform: scale(0.94); }
+button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(135, 90, 190, 0.18); }
+
+.dark input,
+.dark textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f4e7ff;
+}
+
+/* Ripple — subtle, fast */
+@keyframes ripple {
+  0%   { transform: scale(0); opacity: 0.4; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+button .ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(190, 144, 255, 0.28);
+  pointer-events: none;
+  transform: scale(0);
+  animation: ripple 0.5s ease-out;
+}
+
+/* Heart toggle */
+@keyframes heartPop {
+  0%   { transform: scale(0.8); opacity: 0.5; }
+  50%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+.heart-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  min-width: 32px;
+}
+.heart-pop { animation: heartPop 0.3s var(--t-bezier) both; }
+
+/* Star toggle (for favorites) */
+@keyframes starBurst {
+  0%   { transform: scale(1) rotate(0deg); }
+  40%  { transform: scale(1.4) rotate(15deg); }
+  70%  { transform: scale(0.9) rotate(-8deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.star-burst { animation: starBurst 0.45s var(--t-bezier) both; }
+
+/* Shimmer press — only triggers on press (not constant) */
+.shimmer-press::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.22) 50%, transparent 100%);
+  transform: translateX(-120%);
+  transition: transform 0.4s ease;
+  pointer-events: none;
+}
+.shimmer-press:active::before { transform: translateX(120%); }
+
+.icon-button { transition: transform var(--t-fast) var(--t-bezier); }
+.icon-button:active { transform: scale(0.92) rotate(-3deg); }
+
+@keyframes springUp {
+  0%   { transform: translate3d(0, 0, 0); }
+  35%  { transform: translate3d(0, -6px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+.nav-button:active { animation: springUp 0.28s var(--t-bezier); }
+
+.interactive-option {
+  transition: transform var(--t-fast) var(--t-bezier), background var(--t-fast) ease;
+}
+@media (hover: hover) {
+  .interactive-option:hover { transform: translate3d(0, -1px, 0); }
+}
+.interactive-option:active { transform: scale(0.98); }
+
+/* ───────────── Bottom nav — Active indicator dot ───────────── */
+@keyframes navDot {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
 .nav-indicator {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: linear-gradient(135deg, #7654A8, #B07ADE);
   margin-top: 2px;
-  box-shadow: 0 0 8px rgba(118, 84, 168, 0.5);
-  animation: navDot 0.3s ease both;
-}
-@keyframes navDot {
-  from { transform: scale(0); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
+  box-shadow: 0 0 6px rgba(118, 84, 168, 0.5);
+  animation: navDot 0.22s var(--t-bezier) both;
 }
 
-/* Nicer file-input button reset */
-input[type="file"]::-webkit-file-upload-button { display: none; }
-
-/* Settings tabs */
+/* ───────────── Settings tabs ───────────── */
 .settings-tab {
   flex: 1;
   padding: 8px 4px;
@@ -285,60 +282,14 @@ input[type="file"]::-webkit-file-upload-button { display: none; }
   font-weight: 600;
   color: var(--text-muted);
   border-bottom: 2px solid transparent;
-  transition: color 0.18s, border-color 0.18s;
+  transition: color var(--t-fast) ease, border-color var(--t-fast) ease;
 }
 .settings-tab.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
 
-/* Help small text in dark mode is visible too */
-.dark ::-webkit-scrollbar-thumb { background: rgba(180, 140, 230, 0.35); }
-
-/* Reduced motion respects */
-@media (prefers-reduced-motion: reduce) {
-  .float, .float2, .float3,
-  .breathe, .breathe2,
-  .twinkle, .twinkle2, .twinkle3,
-  .shimmer-bg,
-  .glass-card,
-  .su0, .su1, .su2, .su3, .su4, .su5, .su6, .su7, .su8 {
-    animation: none !important;
-  }
-  .page-enter { animation: none !important; }
-}
-
-
-/* ───── Dark-mode overrides for hardcoded dashboard colors ───── */
-/* These let the existing dashboard markup adapt without rewrites. */
-
-.dark .text-\[\#261B40\] { color: var(--text-primary) !important; }
-.dark .text-\[\#5A3E8A\] { color: var(--text-secondary) !important; }
-.dark .text-\[\#9685B0\] { color: var(--text-muted) !important; }
-.dark .text-\[\#B49FD0\] { color: var(--text-faint) !important; }
-.dark .text-\[\#7654A8\] { color: var(--accent) !important; }
-.dark .text-\[\#C4A8E0\] { color: var(--text-faint) !important; }
-.dark .text-\[\#C5B4DA\] { color: var(--text-faint) !important; }
-
-.dark .bg-white\/35,
-.dark .bg-white\/40,
-.dark .bg-white\/45,
-.dark .bg-white\/50,
-.dark .bg-white\/55,
-.dark .bg-white\/60,
-.dark .bg-white\/65,
-.dark .bg-white\/70,
-.dark .bg-white\/75,
-.dark .bg-white\/80 { background: var(--bg-input) !important; }
-
-.dark .border-\[\#DDD3F0\] { border-color: var(--border-soft) !important; }
-.dark .border-\[\#C4A8E0\] { border-color: rgba(196, 168, 224, 0.4) !important; }
-
-/* Overlay surface used for full-screen pages */
-.page-surface { background: var(--bg-page); color: var(--text-primary); min-height: 100vh; }
-.page-header  { background: var(--bg-elevated); border-bottom: 1px solid var(--border-card); }
-
-/* Toggles & utility */
+/* ───────────── Reusable utility classes ───────────── */
 .btn-soft {
   background: var(--bg-card-soft);
   border: 1px solid var(--border-soft);
@@ -348,9 +299,11 @@ input[type="file"]::-webkit-file-upload-button { display: none; }
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+  transition: transform var(--t-fast) var(--t-bezier);
 }
-.btn-soft:hover { transform: translateY(-1px); }
+@media (hover: hover) {
+  .btn-soft:hover { transform: translate3d(0, -1px, 0); }
+}
 .btn-soft:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .btn-danger {
@@ -375,3 +328,114 @@ input[type="file"]::-webkit-file-upload-button { display: none; }
   background: var(--danger-bg);
   color: var(--danger);
 }
+
+/* ───────────── Page surfaces (dark-mode aware) ───────────── */
+.page-surface { background: var(--bg-page); color: var(--text-primary); min-height: 100vh; }
+.page-header  { background: var(--bg-elevated); border-bottom: 1px solid var(--border-card); }
+
+/* ───────────── Dark-mode overrides for hardcoded dashboard colors ───────────── */
+.dark .text-\[\#261B40\] { color: var(--text-primary) !important; }
+.dark .text-\[\#5A3E8A\] { color: var(--text-secondary) !important; }
+.dark .text-\[\#9685B0\] { color: var(--text-muted) !important; }
+.dark .text-\[\#B49FD0\] { color: var(--text-faint) !important; }
+.dark .text-\[\#7654A8\] { color: var(--accent) !important; }
+.dark .text-\[\#C4A8E0\] { color: var(--text-faint) !important; }
+.dark .text-\[\#C5B4DA\] { color: var(--text-faint) !important; }
+
+.dark .bg-white\/35,
+.dark .bg-white\/40,
+.dark .bg-white\/45,
+.dark .bg-white\/50,
+.dark .bg-white\/55,
+.dark .bg-white\/60,
+.dark .bg-white\/65,
+.dark .bg-white\/70,
+.dark .bg-white\/75,
+.dark .bg-white\/80 { background: var(--bg-input) !important; }
+
+.dark .border-\[\#DDD3F0\] { border-color: var(--border-soft) !important; }
+.dark .border-\[\#C4A8E0\] { border-color: rgba(196, 168, 224, 0.4) !important; }
+
+/* ───────────── Onboarding modal ───────────── */
+@keyframes onboardEnter {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.onboard-card { animation: onboardEnter 0.4s var(--t-bezier) both; }
+
+@keyframes shimmerLine {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.shimmer-text {
+  background: linear-gradient(90deg, #7654A8, #C4A8E0, #B07ADE, #7654A8);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmerLine 3s ease infinite;
+}
+
+/* ───────────── Offline banner ───────────── */
+@keyframes slideDown {
+  from { opacity: 0; transform: translate3d(0, -100%, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.offline-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 200;
+  padding: 6px 14px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #7654A8, #A870D8);
+  color: white;
+  box-shadow: 0 2px 12px rgba(120, 80, 190, 0.35);
+  animation: slideDown 0.28s var(--t-bezier) both;
+}
+
+/* ───────────── PWA install banner ───────────── */
+.install-pill {
+  position: fixed;
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7654A8, #A870D8);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(120, 80, 190, 0.4);
+  animation: slideUp 0.28s var(--t-bezier) both;
+}
+.install-pill button {
+  background: rgba(255, 255, 255, 0.18);
+  border: none;
+  color: white;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ───────────── Reduced motion ───────────── */
+@media (prefers-reduced-motion: reduce) {
+  .float, .float2, .float3,
+  .breathe, .breathe2,
+  .twinkle, .twinkle2, .twinkle3,
+  .shimmer-text,
+  .su0, .su1, .su2, .su3, .su4, .su5, .su6, .su7, .su8,
+  .page-enter, .overlay-bg, .onboard-card, .offline-banner, .install-pill {
+    animation: none !important;
+  }
+}
+
+/* ───────────── Containment for performance ───────────── */
+.glass-card { contain: layout style; }

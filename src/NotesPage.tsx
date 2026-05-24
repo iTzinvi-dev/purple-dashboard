@@ -22,12 +22,22 @@ interface TextStyle {
   align: "left" | "center" | "right";
 }
 
+type Tool = "pencil" | "pen" | "highlighter" | "eraser";
+
+interface Stroke {
+  tool: Tool;
+  color: string;
+  width: number;
+  opacity: number;
+  points: { x: number; y: number }[];
+}
+
 const FONTS = [
-  { label: "DM Sans",    value: "'DM Sans', sans-serif" },
-  { label: "Cormorant",  value: "'Cormorant Garamond', serif" },
-  { label: "Monospace",  value: "'Courier New', monospace" },
-  { label: "Cursive",    value: "'Dancing Script', cursive" },
-  { label: "Rounded",    value: "'Nunito', sans-serif" },
+  { label: "DM Sans",   value: "'DM Sans', sans-serif" },
+  { label: "Cormorant", value: "'Cormorant Garamond', serif" },
+  { label: "Monospace", value: "'Courier New', monospace" },
+  { label: "Cursive",   value: "'Dancing Script', cursive" },
+  { label: "Rounded",   value: "'Nunito', sans-serif" },
 ];
 
 const COLORS = [
@@ -54,7 +64,8 @@ const DEFAULT_STYLE: TextStyle = {
 };
 
 const BRUSH_SIZES = [2, 5, 10, 18];
-const SAVE_DEBOUNCE_MS = 600;
+const SAVE_DEBOUNCE_MS = 500;
+const MAX_UNDO_DEPTH = 40;
 
 const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -82,60 +93,111 @@ const loadNotes = (): Note[] => {
   }
 };
 
-// WebP if supported (smaller + has alpha), otherwise PNG
-let _webpSupported: boolean | null = null;
+let _webp: boolean | null = null;
 const supportsWebp = (): boolean => {
-  if (_webpSupported !== null) return _webpSupported;
+  if (_webp !== null) return _webp;
   try {
     const c = document.createElement("canvas");
     c.width = 1; c.height = 1;
-    _webpSupported = c.toDataURL("image/webp").startsWith("data:image/webp");
-  } catch { _webpSupported = false; }
-  return _webpSupported;
+    _webp = c.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch { _webp = false; }
+  return _webp;
 };
 
-const canvasToBestDataUrl = (canvas: HTMLCanvasElement): string =>
+const canvasToBest = (canvas: HTMLCanvasElement): string =>
   supportsWebp() ? canvas.toDataURL("image/webp", 0.85) : canvas.toDataURL("image/png");
+
+// ─────────────── Drawing helpers ───────────────
+
+interface DrawStyleArgs { tool: Tool; color: string; width: number; opacity: number; }
+
+function applyStyle(ctx: CanvasRenderingContext2D, s: DrawStyleArgs) {
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (s.tool === "eraser") {
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.lineWidth = s.width * 3;
+    ctx.strokeStyle = "rgba(0,0,0,1)";
+    ctx.globalAlpha = 1;
+  } else if (s.tool === "highlighter") {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.lineWidth = s.width * 4;
+    ctx.strokeStyle = s.color;
+    ctx.globalAlpha = 0.3 * s.opacity;
+  } else if (s.tool === "pencil") {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.lineWidth = s.width * 0.8;
+    ctx.strokeStyle = s.color;
+    ctx.globalAlpha = 0.7 * s.opacity;
+  } else {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.lineWidth = s.width;
+    ctx.strokeStyle = s.color;
+    ctx.globalAlpha = s.opacity;
+  }
+}
+
+// Draw a smooth stroke with quadratic curves through midpoints.
+function drawSmoothStroke(ctx: CanvasRenderingContext2D, st: Stroke) {
+  const pts = st.points;
+  if (pts.length === 0) return;
+  applyStyle(ctx, st);
+  ctx.beginPath();
+  if (pts.length < 3) {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    return;
+  }
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const cx = pts[i].x;
+    const cy = pts[i].y;
+    const mx = (pts[i].x + pts[i + 1].x) / 2;
+    const my = (pts[i].y + pts[i + 1].y) / 2;
+    ctx.quadraticCurveTo(cx, cy, mx, my);
+  }
+  const last = pts[pts.length - 1];
+  ctx.lineTo(last.x, last.y);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
 
 export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
   const [notes, setNotes] = useState<Note[]>(() => loadNotes());
   const [activeId, setActiveId] = useState<string | null>(() => loadNotes()[0]?.id ?? null);
   const [tab, setTab] = useState<"write" | "style" | "draw">("write");
-  const [tool, setTool] = useState<"pencil" | "pen" | "highlighter" | "eraser">("pen");
+  const [tool, setTool] = useState<Tool>("pen");
   const [brushSize, setBrushSize] = useState(1);
   const [drawColor, setDrawColor] = useState("#7654A8");
   const [opacity, setOpacity] = useState(1);
   const [editingTitle, setEditingTitle] = useState(false);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
 
+  // History force-render counter so React knows when undo/redo happens
+  const [historyVersion, setHistoryVersion] = useState(0);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
+  const cssSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+
+  // Drawing state — kept in refs to avoid re-renders during stroke
+  const strokesRef = useRef<Stroke[]>([]);     // committed strokes (undo source)
+  const redoRef = useRef<Stroke[]>([]);        // strokes available to redo
+  const baseImgRef = useRef<HTMLImageElement | null>(null); // background dataURL if note had one
+  const currentStrokeRef = useRef<Stroke | null>(null);
   const isDrawingRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dprRef = useRef(1);
 
   const active = notes.find(n => n.id === activeId) ?? null;
 
-  const save = useCallback((updated: Note[]) => {
+  const persistNotes = useCallback((updated: Note[]) => {
     setNotes(updated);
     const ok = ls.set("notes_v2", JSON.stringify(updated));
     if (!ok) setStorageWarning("storage full — try clearing old notes");
     else setStorageWarning(null);
   }, []);
-
-  const createNote = () => {
-    const n = newNote();
-    save([n, ...notes]);
-    setActiveId(n.id);
-    setTab("write");
-  };
-
-  const deleteNote = (id: string) => {
-    const updated = notes.filter(n => n.id !== id);
-    save(updated);
-    if (activeId === id) setActiveId(updated[0]?.id ?? null);
-  };
 
   const updateNote = useCallback((id: string, patch: Partial<Note>) => {
     setNotes(prev => {
@@ -146,123 +208,217 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
     });
   }, []);
 
+  const createNote = () => {
+    const n = newNote();
+    persistNotes([n, ...notes]);
+    setActiveId(n.id);
+    setTab("write");
+  };
+
+  const deleteNote = (id: string) => {
+    const updated = notes.filter(n => n.id !== id);
+    persistNotes(updated);
+    if (activeId === id) setActiveId(updated[0]?.id ?? null);
+  };
+
   const updateStyle = (patch: Partial<TextStyle>) => {
     if (!active) return;
     updateNote(active.id, { textStyle: { ...active.textStyle, ...patch } });
   };
 
-  // ── Canvas setup with DPR for crisp lines ──
+  // ── Re-render full canvas from history ──
+  const rerender = useCallback(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    const { w, h } = cssSizeRef.current;
+    ctx.clearRect(0, 0, w, h);
+    if (baseImgRef.current) {
+      ctx.drawImage(baseImgRef.current, 0, 0, w, h);
+    }
+    for (const st of strokesRef.current) drawSmoothStroke(ctx, st);
+  }, []);
+
+  // ── Canvas (re)init when entering draw tab or switching note ──
   useEffect(() => {
     if (tab !== "draw" || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    dprRef.current = dpr;
     const cssW = canvas.offsetWidth;
     const cssH = canvas.offsetHeight;
-    canvas.width = cssW * dpr;
-    canvas.height = cssH * dpr;
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctxRef.current = ctx;
+    cssSizeRef.current = { w: cssW, h: cssH };
+
+    // Reset history for the new note
+    strokesRef.current = [];
+    redoRef.current = [];
+    setHistoryVersion(v => v + 1);
 
     if (active?.drawing) {
       const img = new Image();
       img.onload = () => {
-        ctx.clearRect(0, 0, cssW, cssH);
-        ctx.drawImage(img, 0, 0, cssW, cssH);
+        baseImgRef.current = img;
+        rerender();
+      };
+      img.onerror = () => {
+        baseImgRef.current = null;
+        rerender();
       };
       img.src = active.drawing;
     } else {
+      baseImgRef.current = null;
       ctx.clearRect(0, 0, cssW, cssH);
     }
-  }, [tab, activeId, active?.drawing]);
+  }, [tab, activeId, active?.drawing, rerender]);
 
-  // Cleanup pending save timer on unmount
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);
 
-  const queueDrawingSave = useCallback(() => {
+  const queueSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       if (!canvasRef.current || !active) return;
-      const dataUrl = canvasToBestDataUrl(canvasRef.current);
+      const dataUrl = canvasToBest(canvasRef.current);
       updateNote(active.id, { drawing: dataUrl });
     }, SAVE_DEBOUNCE_MS);
   }, [active, updateNote]);
 
-  const getPointerPos = (e: React.PointerEvent): { x: number; y: number } => {
+  // ── Pointer handlers ──
+  const getPos = (e: React.PointerEvent | PointerEvent): { x: number; y: number } => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (!canvasRef.current || !ctxRef.current) return;
     e.preventDefault();
-    if (!canvasRef.current) return;
     canvasRef.current.setPointerCapture(e.pointerId);
     isDrawingRef.current = true;
-    lastPos.current = getPointerPos(e);
+
+    const stroke: Stroke = {
+      tool,
+      color: drawColor,
+      width: BRUSH_SIZES[brushSize],
+      opacity,
+      points: [getPos(e)],
+    };
+    currentStrokeRef.current = stroke;
+
+    // Draw initial dot so a tap leaves a mark
+    const ctx = ctxRef.current;
+    applyStyle(ctx, stroke);
+    ctx.beginPath();
+    ctx.arc(stroke.points[0].x, stroke.points[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.fillStyle = ctx.strokeStyle as string;
+    ctx.fill();
+    ctx.globalAlpha = 1;
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!isDrawingRef.current || !ctxRef.current || !lastPos.current) return;
+    if (!isDrawingRef.current || !ctxRef.current) return;
+    const stroke = currentStrokeRef.current;
+    if (!stroke) return;
     e.preventDefault();
+
+    // Pull all coalesced events for accurate strokes (especially fast movement)
+    const native = e.nativeEvent;
+    const events = (native as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] })
+      .getCoalescedEvents?.() ?? [native as PointerEvent];
+
     const ctx = ctxRef.current;
-    const pos = getPointerPos(e);
+    applyStyle(ctx, stroke);
 
-    ctx.beginPath();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    for (const ev of events) {
+      const pos = getPos(ev);
+      const last = stroke.points[stroke.points.length - 1];
 
-    if (tool === "eraser") {
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.lineWidth = BRUSH_SIZES[brushSize] * 3;
-      ctx.strokeStyle = "rgba(0,0,0,1)";
-    } else if (tool === "highlighter") {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.lineWidth = BRUSH_SIZES[brushSize] * 4;
-      ctx.strokeStyle = drawColor;
-      ctx.globalAlpha = 0.3 * opacity;
-    } else if (tool === "pencil") {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.lineWidth = BRUSH_SIZES[brushSize] * 0.8;
-      ctx.strokeStyle = drawColor;
-      ctx.globalAlpha = 0.7 * opacity;
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.lineWidth = BRUSH_SIZES[brushSize];
-      ctx.strokeStyle = drawColor;
-      ctx.globalAlpha = opacity;
+      // Skip points that are too close (saves work, reduces jitter)
+      const dx = pos.x - last.x;
+      const dy = pos.y - last.y;
+      if (dx * dx + dy * dy < 1.5) continue;
+
+      stroke.points.push(pos);
+
+      // Draw incremental smooth segment using midpoints
+      if (stroke.points.length >= 3) {
+        const a = stroke.points[stroke.points.length - 3];
+        const b = stroke.points[stroke.points.length - 2];
+        const c = stroke.points[stroke.points.length - 1];
+        const m1 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const m2 = { x: (b.x + c.x) / 2, y: (b.y + c.y) / 2 };
+        ctx.beginPath();
+        ctx.moveTo(m1.x, m1.y);
+        ctx.quadraticCurveTo(b.x, b.y, m2.x, m2.y);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(last.x, last.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+      }
     }
-
-    ctx.moveTo(lastPos.current.x, lastPos.current.y);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    lastPos.current = pos;
+    ctx.globalAlpha = 1;
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
-    lastPos.current = null;
-    if (ctxRef.current) ctxRef.current.globalAlpha = 1;
     if (canvasRef.current) {
       try { canvasRef.current.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     }
-    queueDrawingSave();
+    const stroke = currentStrokeRef.current;
+    if (stroke && stroke.points.length > 0) {
+      strokesRef.current.push(stroke);
+      // cap depth — drop oldest (gets baked into baseImg implicitly later)
+      if (strokesRef.current.length > MAX_UNDO_DEPTH) {
+        strokesRef.current.shift();
+      }
+      redoRef.current = [];          // any new stroke wipes the redo stack
+      setHistoryVersion(v => v + 1);
+    }
+    currentStrokeRef.current = null;
+    queueSave();
+  };
+
+  const undo = () => {
+    if (strokesRef.current.length === 0) return;
+    const popped = strokesRef.current.pop()!;
+    redoRef.current.push(popped);
+    setHistoryVersion(v => v + 1);
+    rerender();
+    queueSave();
+  };
+
+  const redo = () => {
+    if (redoRef.current.length === 0) return;
+    const popped = redoRef.current.pop()!;
+    strokesRef.current.push(popped);
+    setHistoryVersion(v => v + 1);
+    rerender();
+    queueSave();
   };
 
   const clearCanvas = () => {
     if (!ctxRef.current || !canvasRef.current) return;
-    const cssW = canvasRef.current.offsetWidth;
-    const cssH = canvasRef.current.offsetHeight;
-    ctxRef.current.clearRect(0, 0, cssW, cssH);
+    const { w, h } = cssSizeRef.current;
+    ctxRef.current.clearRect(0, 0, w, h);
+    strokesRef.current = [];
+    redoRef.current = [];
+    baseImgRef.current = null;
+    setHistoryVersion(v => v + 1);
     if (active) updateNote(active.id, { drawing: "" });
   };
+
+  const canUndo = strokesRef.current.length > 0;
+  const canRedo = redoRef.current.length > 0;
 
   const [now] = useState(() => Date.now());
   const timeAgo = (ts: number) => {
@@ -274,17 +430,17 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
   };
 
   return (
-    <div className="page-surface" style={{ fontFamily: "'DM Sans', system-ui, sans-serif", display: "flex", flexDirection: "column", height: "100%", paddingBottom: 0 }}>
+    <div className="page-surface" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
       {/* Header */}
-      <div className="page-header" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 16px 10px", backdropFilter: "blur(14px)" }}>
+      <div className="page-header" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 16px 10px" }}>
         {onBack && (
-          <button onClick={onBack} aria-label="back"
+          <button onClick={onBack} aria-label="back" className="icon-button"
             style={{ background: "var(--bg-card-soft)", border: "1px solid var(--border-card)", borderRadius: "50%", width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: "var(--text-secondary)", flexShrink: 0 }}>←</button>
         )}
         <h1 style={{ margin: 0, fontSize: 22, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", color: "var(--text-secondary)", flex: 1 }}>my notes</h1>
-        <button onClick={createNote}
-          style={{ background: "linear-gradient(135deg, #7654A8, #A870D8)", border: "none", borderRadius: 14, padding: "8px 16px", color: "white", cursor: "pointer", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 14px rgba(120,80,190,.3)" }}>+ new</button>
+        <button onClick={createNote} className="btn-purple shimmer-press"
+          style={{ borderRadius: 14, padding: "8px 16px", fontSize: 13, fontWeight: 600 }}>+ new</button>
       </div>
 
       {storageWarning && (
@@ -302,6 +458,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
           )}
           {notes.map(n => (
             <div key={n.id} onClick={() => { setActiveId(n.id); setTab("write"); }}
+              className="interactive-option"
               style={{
                 padding: "10px 8px", borderRadius: 14, marginBottom: 6, cursor: "pointer",
                 background: activeId === n.id ? "var(--accent-soft)" : "var(--bg-input)",
@@ -320,10 +477,10 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
           {!active ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <span style={{ fontSize: 48 }}>📔</span>
+              <span style={{ fontSize: 48 }} className="float">📔</span>
               <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 14 }}>select or create a note</p>
-              <button onClick={createNote}
-                style={{ background: "linear-gradient(135deg, #7654A8, #A870D8)", border: "none", borderRadius: 16, padding: "12px 24px", color: "white", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>create first note 💜</button>
+              <button onClick={createNote} className="btn-purple shimmer-press"
+                style={{ borderRadius: 16, padding: "12px 24px", fontSize: 14, fontWeight: 600 }}>create first note 💜</button>
             </div>
           ) : (
             <>
@@ -345,7 +502,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
               <div style={{ display: "flex", borderBottom: "1px solid var(--border-card)", background: "var(--bg-card-soft)" }}>
                 {(["write", "style", "draw"] as const).map(t => (
                   <button key={t} onClick={() => setTab(t)}
-                    style={{ flex: 1, padding: "10px 4px", border: "none", background: "none", cursor: "pointer", fontSize: 12, fontWeight: tab === t ? 700 : 400, color: tab === t ? "var(--accent)" : "var(--text-muted)", borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent", transition: "all .2s" }}>
+                    style={{ flex: 1, padding: "10px 4px", border: "none", background: "none", cursor: "pointer", fontSize: 12, fontWeight: tab === t ? 700 : 400, color: tab === t ? "var(--accent)" : "var(--text-muted)", borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent" }}>
                     {t === "write" ? "✏️ write" : t === "style" ? "🎨 style" : "🖌️ draw"}
                   </button>
                 ))}
@@ -354,7 +511,6 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
               {/* Tab Content */}
               <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
 
-                {/* Write Tab */}
                 {tab === "write" && (
                   <textarea
                     value={active.text}
@@ -377,7 +533,6 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                   />
                 )}
 
-                {/* Style Tab */}
                 {tab === "style" && (
                   <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
 
@@ -392,9 +547,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                             background: active.textStyle.fontFamily === f.value ? "var(--accent-soft)" : "var(--bg-input)",
                             cursor: "pointer", fontSize: 12, fontFamily: f.value,
                             color: active.textStyle.fontFamily === f.value ? "var(--accent)" : "var(--text-primary)",
-                          }}>
-                          {f.label}
-                        </button>
+                          }}>{f.label}</button>
                       ))}
                     </div>
 
@@ -421,9 +574,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                               cursor: "pointer", fontSize: 15,
                               color: enabled ? "var(--accent)" : "var(--text-primary)",
                               ...css,
-                            }}>
-                            {label}
-                          </button>
+                            }}>{label}</button>
                         );
                       })}
                       {(["left", "center", "right"] as const).map(a => (
@@ -435,9 +586,7 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                             background: active.textStyle.align === a ? "var(--accent-soft)" : "var(--bg-input)",
                             cursor: "pointer", fontSize: 14,
                             color: "var(--text-primary)",
-                          }}>
-                          {a === "left" ? "⬅" : a === "center" ? "↔" : "➡"}
-                        </button>
+                          }}>{a === "left" ? "⬅" : a === "center" ? "↔" : "➡"}</button>
                       ))}
                     </div>
 
@@ -469,15 +618,12 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                             border: active.textStyle.highlight === c ? "3px solid var(--accent)" : "2px solid rgba(0,0,0,.1)",
                             cursor: "pointer", fontSize: c === "transparent" ? 12 : 0,
                             color: "var(--text-muted)",
-                          }}>
-                          {c === "transparent" ? "✕" : ""}
-                        </button>
+                          }}>{c === "transparent" ? "✕" : ""}</button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Draw Tab */}
                 {tab === "draw" && (
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
 
@@ -498,13 +644,11 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                               borderColor: tool === id ? "var(--accent)" : "var(--border-soft)",
                               background: tool === id ? "var(--accent-soft)" : "var(--bg-input)",
                               cursor: "pointer", fontSize: 16,
-                            }}>
-                            {icon}
-                          </button>
+                            }}>{icon}</button>
                         ))}
                       </div>
 
-                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 4 }}>
                         {[0, 1, 2, 3].map(s => (
                           <button key={s} onClick={() => setBrushSize(s)}
                             style={{
@@ -532,21 +676,44 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                           style={{ width: 22, height: 22, borderRadius: "50%", border: "none", cursor: "pointer", padding: 0, background: "transparent" }} />
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 80 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 70 }}>
                         <span style={{ fontSize: 10, color: "var(--text-muted)" }}>opacity</span>
                         <input type="range" min={0.1} max={1} step={0.05} value={opacity}
                           onChange={e => setOpacity(+e.target.value)}
                           style={{ flex: 1, accentColor: "#7654A8" }} />
                       </div>
 
-                      <button onClick={clearCanvas}
-                        style={{
-                          padding: "6px 12px", borderRadius: 10,
-                          border: "1.5px solid var(--border-soft)",
-                          background: "var(--bg-input)",
-                          cursor: "pointer", fontSize: 11,
-                          color: "var(--text-muted)", fontWeight: 600,
-                        }}>clear</button>
+                      {/* Undo / Redo / Clear */}
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={undo} disabled={!canUndo} aria-label="undo"
+                          className="icon-button"
+                          style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            border: "1.5px solid var(--border-soft)",
+                            background: "var(--bg-input)",
+                            cursor: canUndo ? "pointer" : "not-allowed",
+                            opacity: canUndo ? 1 : 0.4,
+                            fontSize: 14, color: "var(--text-secondary)",
+                          }}>↶</button>
+                        <button onClick={redo} disabled={!canRedo} aria-label="redo"
+                          className="icon-button"
+                          style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            border: "1.5px solid var(--border-soft)",
+                            background: "var(--bg-input)",
+                            cursor: canRedo ? "pointer" : "not-allowed",
+                            opacity: canRedo ? 1 : 0.4,
+                            fontSize: 14, color: "var(--text-secondary)",
+                          }}>↷</button>
+                        <button onClick={clearCanvas}
+                          style={{
+                            padding: "6px 12px", borderRadius: 10,
+                            border: "1.5px solid var(--border-soft)",
+                            background: "var(--bg-input)",
+                            cursor: "pointer", fontSize: 11,
+                            color: "var(--text-muted)", fontWeight: 600,
+                          }}>clear</button>
+                      </div>
                     </div>
 
                     {/* Canvas */}
@@ -562,6 +729,9 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                       onPointerCancel={onPointerUp}
                       onPointerLeave={onPointerUp}
                     />
+
+                    {/* Hidden marker so React tracks history changes for the buttons */}
+                    <span style={{ display: "none" }} data-history={historyVersion} />
                   </div>
                 )}
 

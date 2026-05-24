@@ -1,67 +1,40 @@
 import { useEffect, useRef } from "react";
 
+/**
+ * Lightweight ambient petals canvas.
+ *  - Auto-tunes count by screen size and CPU cores
+ *  - 24fps throttle (visually smooth, low CPU)
+ *  - Pauses when tab is hidden or page is off-screen
+ *  - Respects prefers-reduced-motion (renders one static frame)
+ *  - Single simple shape (ellipse), no overdraw
+ */
+
 interface Petal {
   x: number; y: number;
   size: number; opacity: number;
-  speedX: number; speedY: number;
-  rotation: number; rotSpeed: number;
-  swayAmp: number; swaySpeed: number; swayOffset: number;
-  color: string; type: number;
+  vx: number; vy: number;
+  rot: number; vRot: number;
+  swayAmp: number; swayFreq: number; swayPhase: number;
+  color: string;
 }
 
-const COLORS = [
-  "#E8C4F0","#D4A8E8","#F0D4F8","#C8A0E0","#F8C8E8","#E0B8F0","#DCA0E0",
-];
-
-function drawPetal(ctx: CanvasRenderingContext2D, p: Petal) {
-  ctx.save();
-  ctx.translate(p.x, p.y);
-  ctx.rotate(p.rotation);
-  ctx.globalAlpha = p.opacity;
-
-  if (p.type === 0) {
-    // Cherry blossom petal — oval with indent
-    ctx.beginPath();
-    ctx.moveTo(0, -p.size);
-    ctx.bezierCurveTo( p.size * 0.8, -p.size * 0.8,  p.size,  p.size * 0.2, 0,  p.size);
-    ctx.bezierCurveTo(-p.size,        p.size * 0.2, -p.size * 0.8, -p.size * 0.8, 0, -p.size);
-    ctx.fillStyle = p.color;
-    ctx.fill();
-  } else if (p.type === 1) {
-    // Round petal
-    ctx.beginPath();
-    ctx.ellipse(0, 0, p.size * 0.55, p.size, 0, 0, Math.PI * 2);
-    ctx.fillStyle = p.color;
-    ctx.fill();
-  } else {
-    // Thin long petal
-    ctx.beginPath();
-    ctx.moveTo(0, -p.size);
-    ctx.bezierCurveTo(p.size * 0.4, -p.size * 0.3, p.size * 0.3, p.size * 0.5, 0, p.size);
-    ctx.bezierCurveTo(-p.size * 0.3, p.size * 0.5, -p.size * 0.4, -p.size * 0.3, 0, -p.size);
-    ctx.fillStyle = p.color;
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
+const COLORS = ["#E8C4F0", "#D4A8E8", "#C8A0E0", "#F0D4F8", "#DCA0E0"];
 
 function newPetal(W: number, H: number, fromTop = false): Petal {
-  const size = 4 + Math.random() * 10;
+  const size = 3 + Math.random() * 7;
   return {
-    x:          Math.random() * W,
-    y:          fromTop ? -size * 2 : Math.random() * H,
+    x: Math.random() * W,
+    y: fromTop ? -size * 2 : Math.random() * H,
     size,
-    opacity:    0.3 + Math.random() * 0.45,
-    speedX:     (Math.random() - 0.5) * 0.5,
-    speedY:     0.4 + Math.random() * 0.9,
-    rotation:   Math.random() * Math.PI * 2,
-    rotSpeed:   (Math.random() - 0.5) * 0.025,
-    swayAmp:    20 + Math.random() * 35,
-    swaySpeed:  0.006 + Math.random() * 0.01,
-    swayOffset: Math.random() * Math.PI * 2,
-    color:      COLORS[Math.floor(Math.random() * COLORS.length)],
-    type:       Math.floor(Math.random() * 3),
+    opacity: 0.32 + Math.random() * 0.4,
+    vx: (Math.random() - 0.5) * 0.4,
+    vy: 0.35 + Math.random() * 0.7,
+    rot: Math.random() * Math.PI * 2,
+    vRot: (Math.random() - 0.5) * 0.018,
+    swayAmp: 0.35 + Math.random() * 0.3,
+    swayFreq: 0.006 + Math.random() * 0.008,
+    swayPhase: Math.random() * Math.PI * 2,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
   };
 }
 
@@ -71,49 +44,57 @@ export default function PetalCanvas() {
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
-    // Respect user motion preferences — render static once and stop
-    const prefersReducedMotion = typeof window !== "undefined"
+    const reduced = typeof window !== "undefined"
       && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     let W = window.innerWidth;
     let H = window.innerHeight;
+
     const setSize = () => {
       W = window.innerWidth; H = window.innerHeight;
-      canvas.width = W * dpr; canvas.height = H * dpr;
-      canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      canvas.style.width = `${W}px`;
+      canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     setSize();
 
-    // Lighter on mobile / smaller screens
-    const isMobile = W < 600;
-    const COUNT = Math.min(isMobile ? 18 : 28, Math.floor((W * H) / 22000));
+    // Auto-tune count: small phones get fewer petals
+    const cores = (navigator.hardwareConcurrency ?? 4);
+    const isSmall = W < 600;
+    const baseCount = isSmall ? 10 : 18;
+    const COUNT = cores <= 4 ? Math.floor(baseCount * 0.7) : baseCount;
+
     const petals: Petal[] = Array.from({ length: COUNT }, () => newPetal(W, H));
-    let t = 0, raf = 0;
+    let t = 0;
+    let raf = 0;
+    let last = performance.now();
+    const targetMs = 1000 / 24; // 24fps is plenty for ambient
 
-    const onResize = () => setSize();
-    window.addEventListener("resize", onResize);
+    let paused = document.hidden;
 
-    // Pause when tab is hidden — saves battery
-    let paused = false;
-    const onVisibility = () => {
-      paused = document.hidden;
-      if (!paused && !prefersReducedMotion) {
-        last = performance.now();
-        raf = requestAnimationFrame(tick);
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+      for (let i = 0; i < petals.length; i++) {
+        const p = petals[i];
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = p.opacity;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.size * 0.55, p.size, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
     };
-    document.addEventListener("visibilitychange", onVisibility);
 
-    // Throttle to ~30fps for smoother feel without overdraw
-    const targetMs = 1000 / 30;
-    let last = performance.now();
-
-    const tick = (now: number = performance.now()) => {
+    const tick = (now: number) => {
       if (paused) return;
       const dt = now - last;
       if (dt < targetMs) {
@@ -121,25 +102,35 @@ export default function PetalCanvas() {
         return;
       }
       last = now - (dt % targetMs);
-
-      ctx.clearRect(0, 0, W, H);
       t++;
+
       for (let i = 0; i < petals.length; i++) {
         const p = petals[i];
-        p.x += p.speedX + Math.sin(t * p.swaySpeed + p.swayOffset) * 0.5;
-        p.y += p.speedY;
-        p.rotation += p.rotSpeed;
-        if (p.y > H + 20 || p.x < -40 || p.x > W + 40)
+        p.x += p.vx + Math.sin(t * p.swayFreq + p.swayPhase) * p.swayAmp;
+        p.y += p.vy;
+        p.rot += p.vRot;
+        if (p.y > H + 20 || p.x < -40 || p.x > W + 40) {
           Object.assign(p, newPetal(W, H, true));
-        drawPetal(ctx, p);
+        }
       }
+      draw();
       raf = requestAnimationFrame(tick);
     };
 
-    if (prefersReducedMotion) {
-      // One static frame
-      ctx.clearRect(0, 0, W, H);
-      petals.forEach(p => drawPetal(ctx, p));
+    const onResize = () => setSize();
+    const onVisibility = () => {
+      paused = document.hidden;
+      if (!paused && !reduced) {
+        last = performance.now();
+        raf = requestAnimationFrame(tick);
+      }
+    };
+
+    window.addEventListener("resize", onResize, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+
+    if (reduced) {
+      draw(); // single static frame
     } else {
       raf = requestAnimationFrame(tick);
     }
@@ -152,9 +143,16 @@ export default function PetalCanvas() {
   }, []);
 
   return (
-    <canvas ref={ref} style={{
-      position: "fixed", inset: 0, zIndex: 0,
-      pointerEvents: "none", opacity: 0.7,
-    }} />
+    <canvas
+      ref={ref}
+      aria-hidden
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 0,
+        pointerEvents: "none",
+        opacity: 0.65,
+      }}
+    />
   );
 }
