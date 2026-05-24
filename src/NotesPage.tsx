@@ -306,6 +306,9 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
     if (tab !== "draw") return;
     strokesRef.current = [];
     redoRef.current = [];
+    // Forcing a re-render here is intentional — undo/redo button enablement
+    // is derived from ref length and needs a render after we wipe history.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHistoryVersion(v => v + 1);
 
     if (active?.drawing) {
@@ -477,7 +480,12 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
     if (active) updateNote(active.id, { drawing: "" });
   };
 
+  // Read undo/redo availability via refs. We force a re-render whenever the
+  // history changes (via setHistoryVersion), so by the time render runs these
+  // ref values are guaranteed to be up to date for the buttons.
+  // eslint-disable-next-line react-hooks/refs
   const canUndo = strokesRef.current.length > 0;
+  // eslint-disable-next-line react-hooks/refs
   const canRedo = redoRef.current.length > 0;
 
   const [now] = useState(() => Date.now());

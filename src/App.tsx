@@ -372,7 +372,7 @@ export default function PurpleDashboard() {
     refreshStorageBytes();
   };
 
-  useEffect(() => { if (showSettings) refreshStorageBytes(); }, [showSettings]);
+  useEffect(() => { if (showSettings) refreshStorageBytes(); }, [showSettings]); // eslint-disable-line react-hooks/set-state-in-effect
 
   const dismissOnboarding = () => {
     ls.set("onboarded_v1", "true");

@@ -98,23 +98,31 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
   const [showSettings, setShowSettings] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Ref keeps the latest handleComplete reachable from inside setInterval, so a
+  // running timer always uses fresh mode/settings/cycle/todayCount even if they
+  // change mid-session (no stale closure capture).
+  const handleCompleteRef = useRef<() => void>(() => {});
 
   const totalForMode = (m: Mode, s: Settings) =>
     (m === "focus" ? s.focus : m === "shortBreak" ? s.shortBreak : s.longBreak) * 60;
 
+  // When mode or settings change while paused, snap the visible time to the new
+  // total. Skipping this while running avoids interrupting an in-flight session.
   useEffect(() => {
-    if (!running) {
-      setSecondsLeft(totalForMode(mode, settings));
-    }
+    if (running) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSecondsLeft(totalForMode(mode, settings));
   }, [mode, settings, running]);
 
+  // Tick loop. Only the `running` flag drives setup/teardown of the interval —
+  // any mode/settings/cycle changes flow through the ref, never re-create it.
   useEffect(() => {
     if (!running) return;
     timerRef.current = setInterval(() => {
       setSecondsLeft(prev => {
         if (prev <= 1) {
           if (timerRef.current) clearInterval(timerRef.current);
-          handleComplete();
+          handleCompleteRef.current();
           return 0;
         }
         return prev - 1;
@@ -123,7 +131,6 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running]);
 
   const handleComplete = () => {
@@ -149,6 +156,11 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
       setSecondsLeft(totalForMode("focus", settings));
     }
   };
+
+  // Refresh the ref every render so the running timer always calls the latest version.
+  useEffect(() => {
+    handleCompleteRef.current = handleComplete;
+  });
 
   const toggle = () => setRunning(r => !r);
 
