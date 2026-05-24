@@ -117,9 +117,6 @@ export default function PurpleDashboard() {
   const [activeTab,    setActiveTab]    = useState("home");
   const [overlayPage,  setOverlayPage]  = useState<Overlay>(null);
 
-  // Onboarding — only ever shown once, when "onboarded_v1" is missing.
-  const [showOnboarding, setShowOnboarding] = useState(() => ls.get("onboarded_v1") !== "true");
-
   // Settings panel
   const [settingsTab,    setSettingsTab]    = useState<"appearance" | "backup" | "privacy">("appearance");
   const [backupBusy,     setBackupBusy]     = useState<string | null>(null);
@@ -374,11 +371,6 @@ export default function PurpleDashboard() {
 
   useEffect(() => { if (showSettings) refreshStorageBytes(); }, [showSettings]); // eslint-disable-line react-hooks/set-state-in-effect
 
-  const dismissOnboarding = () => {
-    ls.set("onboarded_v1", "true");
-    setShowOnboarding(false);
-  };
-
   const promptInstall = async () => {
     if (!installEvent) return;
     try { await installEvent.prompt(); } catch { /* ignore */ }
@@ -427,41 +419,8 @@ export default function PurpleDashboard() {
         </div>
       )}
 
-      {/* Onboarding (first-launch only) */}
-      {showOnboarding && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-5 overlay-bg"
-          style={{ background: "rgba(35,18,65,.78)", backdropFilter: "blur(18px)" }}>
-          <div className="onboard-card glass-card" style={{ borderRadius: 32, maxWidth: 360, width: "100%" }}>
-            <div style={{ padding: "32px 28px 28px", textAlign: "center" }}>
-              <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 14 }}>
-                <Spark size={14} color="#B49FD0" cls="twinkle" />
-                <span style={{ fontSize: 30 }} className="float">💜</span>
-                <Spark size={14} color="#C4A8E0" cls="twinkle2" />
-              </div>
-              <h2 className="shimmer-text"
-                style={{ margin: 0, fontSize: 28, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", fontWeight: 600 }}>
-                Welcome, Pemii
-              </h2>
-              <p style={{ margin: "16px 0 0", fontSize: 15, lineHeight: 1.7, color: "var(--text-secondary)", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
-                This space was made just for you<br />
-                Your little world.
-              </p>
-              <p style={{ margin: "14px 0 22px", fontSize: 14, lineHeight: 1.7, color: "var(--text-primary)" }}>
-                If anything feels off, you know who to call <span style={{ display: "inline-block" }} className="float">🎀</span><br />
-                <span style={{ color: "var(--accent)", fontWeight: 600, fontStyle: "italic" }}>He'll fix it, always.</span>
-              </p>
-              <button onClick={dismissOnboarding}
-                className="btn-purple shimmer-press"
-                style={{ borderRadius: 18, padding: "12px 30px", fontSize: 14, fontWeight: 600 }}>
-                begin 💜
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* PWA install pill */}
-      {showInstallPill && installEvent && !showOnboarding && (
+      {showInstallPill && installEvent && (
         <div className="install-pill">
           <span>✨ install for offline access</span>
           <button onClick={promptInstall}>install</button>
