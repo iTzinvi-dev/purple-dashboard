@@ -1,6 +1,25 @@
-import { useState, useEffect, useRef } from "react";
-import NotesPage from "./NotesPage";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import PetalCanvas from "./PetalCanvas";
+import { approximateBytes, clearAll, formatBytes } from "./storage";
+import {
+  downloadJsonBackup,
+  importJsonFile,
+  isDriveConfigured,
+  uploadToDrive,
+  restoreFromDrive,
+  signOutOfDrive,
+} from "./backup";
+
+// Lazy-load heavy page components so initial dashboard renders fast
+const NotesPage        = lazy(() => import("./NotesPage"));
+const AudioNotesPage   = lazy(() => import("./AudioNotesPage"));
+const ProductivityPage = lazy(() => import("./ProductivityPage"));
+
+const PageFallback = () => (
+  <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%)" }}>
+    <span style={{ fontSize: 28 }} className="breathe">💜</span>
+  </div>
+);
 
 const QUOTES = [
   { a: "real is rare",      b: "you are magic"      },
@@ -109,7 +128,17 @@ export default function PurpleDashboard() {
   const [progress,     setProgress]     = useState(0);
   const [saved,        setSaved]        = useState(false);
   const [activeTab,    setActiveTab]    = useState("home");
-  const [showNotes,    setShowNotes]    = useState(false);
+  const [overlayPage,  setOverlayPage]  = useState<null | "notes" | "audio" | "productivity">(null);
+
+  // Settings panel
+  const [settingsTab,    setSettingsTab]    = useState<"appearance" | "backup" | "privacy">("appearance");
+  const [backupBusy,     setBackupBusy]     = useState<string | null>(null);
+  const [backupMsg,      setBackupMsg]      = useState<string | null>(null);
+  const [backupErr,      setBackupErr]      = useState<string | null>(null);
+  const [importMode,     setImportMode]     = useState<"merge" | "replace">("merge");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [storageBytes,   setStorageBytes]   = useState(0);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileRef  = useRef<HTMLInputElement>(null);
@@ -281,6 +310,78 @@ export default function PurpleDashboard() {
     setShowSettings(false);
   };
 
+  // ── Backup / Restore handlers ──
+  const refreshStorageBytes = () => setStorageBytes(approximateBytes().total);
+
+  const flashMsg = (msg: string) => {
+    setBackupMsg(msg);
+    setBackupErr(null);
+    window.setTimeout(() => setBackupMsg(null), 4000);
+  };
+  const flashErr = (err: unknown) => {
+    const msg = err instanceof Error ? err.message : "something went wrong";
+    setBackupErr(msg);
+    setBackupMsg(null);
+    window.setTimeout(() => setBackupErr(null), 6000);
+  };
+
+  const onExportFile = () => {
+    try {
+      downloadJsonBackup();
+      flashMsg("backup file downloaded 💜");
+    } catch (e) { flashErr(e); }
+  };
+
+  const onImportFilePick = () => importFileRef.current?.click();
+
+  const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = "";
+    if (!file) return;
+    setBackupBusy("reading file...");
+    try {
+      const result = await importJsonFile(file, importMode);
+      flashMsg(`imported ${result.applied} item${result.applied === 1 ? "" : "s"} — refresh to see changes`);
+      refreshStorageBytes();
+    } catch (e) {
+      flashErr(e);
+    } finally {
+      setBackupBusy(null);
+    }
+  };
+
+  const onDriveBackup = async () => {
+    setBackupBusy("uploading to Google Drive...");
+    try {
+      const { bytes } = await uploadToDrive();
+      flashMsg(`backed up to Drive (${formatBytes(bytes)}) 💜`);
+    } catch (e) { flashErr(e); }
+    finally { setBackupBusy(null); }
+  };
+
+  const onDriveRestore = async () => {
+    setBackupBusy("restoring from Google Drive...");
+    try {
+      const result = await restoreFromDrive(importMode);
+      flashMsg(`restored ${result.applied} items from ${new Date(result.exportedAt).toLocaleString()}`);
+      refreshStorageBytes();
+    } catch (e) { flashErr(e); }
+    finally { setBackupBusy(null); }
+  };
+
+  const onClearAll = () => {
+    const removed = clearAll();
+    setShowClearConfirm(false);
+    flashMsg(`cleared ${removed} item${removed === 1 ? "" : "s"} — refresh to see changes`);
+    refreshStorageBytes();
+  };
+
+  // Refresh storage usage whenever settings opens
+  useEffect(() => {
+    if (showSettings) refreshStorageBytes();
+  }, [showSettings]);
+
+
   const h        = time.getHours();
   const greeting = h < 5 ? "sweet dreams" : h < 12 ? "good morning" : h < 17 ? "good afternoon" : h < 21 ? "good evening" : "good night";
   const timeStr  = time.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -305,38 +406,195 @@ export default function PurpleDashboard() {
       />
       <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={handleFiles} />
 
-      {/* Settings Modal */}
+      {/* Settings Modal — Appearance / Backup / Privacy */}
       {showSettings && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-5"
-          style={{ background: "rgba(35,18,65,.52)", backdropFilter: "blur(14px)" }}
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 overlay-bg"
+          style={{ background: "rgba(35,18,65,.55)", backdropFilter: "blur(14px)" }}
           onClick={e => e.target === e.currentTarget && setShowSettings(false)}>
-          <GL radius={28} mode="prominent">
-            <div className="p-7 w-full max-w-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <Bow size={24} color="#C4A8E0" />
-                <h3 className="text-xl font-medium italic text-[#5A3E8A]" style={{ fontFamily: "var(--font-display)" }}>settings</h3>
-              </div>
-              <div className="mb-5 p-4 rounded-3xl border border-[#DDD3F0] bg-white/70">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9685B0] mb-1">dark mode</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" checked={tempDarkMode} onChange={e => setTempDarkMode(e.target.checked)}
-                      className="sr-only peer" />
-                    <div className="w-11 h-6 bg-[#DDD3F0] rounded-full peer-checked:bg-[#7A4DD8] peer-focus:ring-2 peer-focus:ring-[#C4A8E0] transition-all" />
-                    <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-md peer-checked:translate-x-5 transition-transform" />
-                  </label>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setShowSettings(false)}
-                  className="flex-1 py-3 rounded-2xl border border-[#DDD3F0] text-[#9685B0] text-sm micro-button">cancel</button>
-                <button onClick={saveSettings}
-                  className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">apply</button>
-              </div>
+          <div className="glass-card w-full max-w-md page-enter" style={{ borderRadius: 28, maxHeight: "min(86vh, 700px)", display: "flex", flexDirection: "column" }}>
+            <div className="px-6 pt-6 pb-3 flex items-center gap-3" style={{ borderBottom: "1px solid var(--border-card)" }}>
+              <Bow size={22} color="var(--accent-2)" />
+              <h3 className="text-xl font-medium italic"
+                style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)", flex: 1 }}>settings</h3>
+              <button onClick={() => setShowSettings(false)}
+                className="bg-transparent border-none cursor-pointer text-base"
+                style={{ color: "var(--text-muted)" }}>✕</button>
             </div>
-          </GL>
+
+            {/* Tabs */}
+            <div className="flex px-4 pt-2" style={{ gap: 4 }}>
+              {(["appearance", "backup", "privacy"] as const).map(t => (
+                <button key={t} onClick={() => setSettingsTab(t)}
+                  className={`settings-tab ${settingsTab === t ? "active" : ""}`}>
+                  {t === "appearance" ? "🎨 look" : t === "backup" ? "☁️ backup" : "🔒 privacy"}
+                </button>
+              ))}
+            </div>
+
+            <div className="px-6 py-5" style={{ overflowY: "auto" }}>
+
+              {/* APPEARANCE */}
+              {settingsTab === "appearance" && (
+                <div className="flex flex-col gap-4">
+                  <div className="p-4 rounded-3xl"
+                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)" }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest mb-0.5"
+                          style={{ color: "var(--text-muted)" }}>dark mode</p>
+                        <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>soft on the eyes at night</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked={tempDarkMode} onChange={e => setTempDarkMode(e.target.checked)}
+                          className="sr-only peer" />
+                        <div className="w-11 h-6 rounded-full peer-checked:bg-[#7A4DD8] transition-all"
+                          style={{ background: "var(--border-soft)" }} />
+                        <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-md peer-checked:translate-x-5 transition-transform" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-center" style={{ color: "var(--text-faint)" }}>
+                    animations slow down automatically if your device prefers reduced motion 💜
+                  </p>
+
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => { setTempDarkMode(darkMode); setShowSettings(false); }}
+                      className="flex-1 py-3 rounded-2xl text-sm icon-button"
+                      style={{ border: "1px solid var(--border-soft)", color: "var(--text-muted)", background: "transparent", cursor: "pointer" }}>cancel</button>
+                    <button onClick={saveSettings}
+                      className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">apply</button>
+                  </div>
+                </div>
+              )}
+
+              {/* BACKUP */}
+              {settingsTab === "backup" && (
+                <div className="flex flex-col gap-4">
+
+                  {/* Local file */}
+                  <div className="p-4 rounded-3xl"
+                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)" }}>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest mb-2"
+                      style={{ color: "var(--text-muted)" }}>local backup file</p>
+                    <p className="text-[11px] mb-3" style={{ color: "var(--text-faint)" }}>
+                      download a JSON file you can keep anywhere — Drive, iCloud, email to yourself.
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={onExportFile} disabled={!!backupBusy}
+                        className="flex-1 btn-soft">⬇ export</button>
+                      <button onClick={onImportFilePick} disabled={!!backupBusy}
+                        className="flex-1 btn-soft">⬆ import</button>
+                    </div>
+                    <input ref={importFileRef} type="file" accept="application/json,.json" hidden onChange={onImportFile} />
+                  </div>
+
+                  {/* Google Drive */}
+                  <div className="p-4 rounded-3xl"
+                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)" }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest"
+                        style={{ color: "var(--text-muted)" }}>google drive</p>
+                      <span className="text-[10px]" style={{ color: isDriveConfigured() ? "var(--accent)" : "var(--text-faint)" }}>
+                        {isDriveConfigured() ? "ready" : "not configured"}
+                      </span>
+                    </div>
+                    {isDriveConfigured() ? (
+                      <>
+                        <p className="text-[11px] mb-3" style={{ color: "var(--text-faint)" }}>
+                          saves to a private app folder you can't see in Drive — only this app can read it.
+                        </p>
+                        <div className="flex gap-2">
+                          <button onClick={onDriveBackup} disabled={!!backupBusy}
+                            className="flex-1 btn-purple shimmer-press"
+                            style={{ borderRadius: 14, padding: "10px 14px", fontSize: 13, fontWeight: 600 }}>
+                            ☁ backup now
+                          </button>
+                          <button onClick={onDriveRestore} disabled={!!backupBusy}
+                            className="flex-1 btn-soft">↻ restore</button>
+                        </div>
+                        <button onClick={() => { signOutOfDrive(); flashMsg("signed out of Google Drive"); }}
+                          className="w-full mt-2 text-[10px] underline bg-transparent border-none cursor-pointer"
+                          style={{ color: "var(--text-faint)" }}>sign out</button>
+                      </>
+                    ) : (
+                      <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>
+                        set <code style={{ background: "var(--accent-soft)", padding: "1px 5px", borderRadius: 4, fontSize: 10 }}>VITE_GOOGLE_CLIENT_ID</code> at build time to enable.
+                        the local backup file works fine without it.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Import mode */}
+                  <div className="p-3 rounded-2xl flex gap-1"
+                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)" }}>
+                    {(["merge", "replace"] as const).map(m => (
+                      <button key={m} onClick={() => setImportMode(m)}
+                        className="flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all"
+                        style={{
+                          background: importMode === m ? "linear-gradient(135deg, #7654A8, #A870D8)" : "transparent",
+                          color: importMode === m ? "white" : "var(--text-muted)",
+                          border: "none",
+                          cursor: "pointer",
+                        }}>
+                        {m === "merge" ? "merge with current" : "replace current"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Storage usage */}
+                  <p className="text-[10px] text-center" style={{ color: "var(--text-faint)" }}>
+                    using {formatBytes(storageBytes)} of local storage
+                  </p>
+
+                  {/* Status */}
+                  {backupBusy && <div className="status-line">⏳ {backupBusy}</div>}
+                  {backupMsg  && <div className="status-line">{backupMsg}</div>}
+                  {backupErr  && <div className="status-line error">⚠ {backupErr}</div>}
+                </div>
+              )}
+
+              {/* PRIVACY */}
+              {settingsTab === "privacy" && (
+                <div className="flex flex-col gap-4">
+                  <div className="p-4 rounded-3xl"
+                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)" }}>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest mb-2"
+                      style={{ color: "var(--text-muted)" }}>your data is yours</p>
+                    <ul className="text-[11px] leading-relaxed pl-4" style={{ color: "var(--text-secondary)", listStyle: "disc" }}>
+                      <li>all notes, audio, and journal text stay <strong>on this device</strong> by default</li>
+                      <li>no analytics, no tracking, no ads</li>
+                      <li>weather uses your location only to fetch local weather; nothing is stored or sent anywhere else</li>
+                      <li>Google Drive backup (if you enable it) goes to a private folder only this app can read</li>
+                      <li>uninstalling the app or clearing browser data will erase everything</li>
+                    </ul>
+                  </div>
+
+                  <div className="p-4 rounded-3xl"
+                    style={{ background: "var(--danger-bg)", border: "1px solid var(--danger)" }}>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest mb-1"
+                      style={{ color: "var(--danger)" }}>danger zone</p>
+                    <p className="text-[11px] mb-3" style={{ color: "var(--text-secondary)" }}>
+                      this erases all notes, audio notes, todos, mood, journal, and pomodoro stats from this device.
+                    </p>
+                    {!showClearConfirm ? (
+                      <button onClick={() => setShowClearConfirm(true)} className="btn-danger w-full">clear all data</button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowClearConfirm(false)}
+                          className="flex-1 btn-soft">cancel</button>
+                        <button onClick={onClearAll}
+                          className="flex-1 btn-danger"
+                          style={{ background: "var(--danger)", color: "white" }}>yes, erase</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {backupMsg && <div className="status-line">{backupMsg}</div>}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -644,28 +902,41 @@ export default function PurpleDashboard() {
         <p className="text-center text-[11px] text-[#B49FD0] py-1">made with 💜 just for you</p>
       </div>
 
-      {showNotes && (
-        <div className="fixed inset-0 z-[400] bg-white/80 backdrop-blur-sm">
-          <NotesPage onBack={() => { setShowNotes(false); setActiveTab("home"); }} />
+      {overlayPage && (
+        <div className="fixed inset-0 z-[400] overlay-bg" style={{ background: "var(--bg-page)" }}>
+          <div className="page-enter h-full">
+            <Suspense fallback={<PageFallback />}>
+              {overlayPage === "notes"        && <NotesPage onBack={() => { setOverlayPage(null); setActiveTab("home"); }} />}
+              {overlayPage === "audio"        && <AudioNotesPage onBack={() => { setOverlayPage(null); setActiveTab("home"); }} />}
+              {overlayPage === "productivity" && <ProductivityPage onBack={() => { setOverlayPage(null); setActiveTab("home"); }} />}
+            </Suspense>
+          </div>
         </div>
       )}
 
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center pt-2.5 pb-[18px]"
-        style={{ background: "rgba(232,224,250,.90)", backdropFilter: "blur(24px)", borderTop: "1px solid rgba(255,255,255,.82)", boxShadow: "0 -4px 28px rgba(118,84,168,.08)" }}>
+        style={{
+          background: "var(--bg-elevated)",
+          backdropFilter: "blur(18px)",
+          borderTop: "1px solid var(--border-card)",
+          boxShadow: "var(--shadow-elevated)",
+        }}>
         {(["🤍","💬","🎀","⭐","🎵"] as const).map((icon, i) => {
           const id = ["home","chat","bow","star","music"][i];
           const active = activeTab === id;
           return (
             <button key={id} onClick={() => {
-                if (id === "chat") {
-                  setShowNotes(true);
-                }
                 setActiveTab(id);
+                if (id === "chat")       setOverlayPage("notes");
+                else if (id === "bow")   setOverlayPage("productivity");
+                else if (id === "music") setOverlayPage("audio");
+                else                     setOverlayPage(null);
               }}
-              className="bg-transparent border-none cursor-pointer transition-all duration-200"
-              style={{ fontSize: active ? "26px" : "21px", opacity: active ? 1 : .38, transform: active ? "translateY(-3px)" : "none", padding: "4px 14px" }}>
-              {icon}
+              className="bg-transparent border-none cursor-pointer transition-all duration-200 flex flex-col items-center"
+              style={{ opacity: active ? 1 : .42, transform: active ? "translateY(-3px)" : "none", padding: "4px 14px" }}>
+              <span style={{ fontSize: active ? 26 : 21, transition: "font-size .2s" }}>{icon}</span>
+              {active && <span className="nav-indicator" aria-hidden />}
             </button>
           );
         })}
