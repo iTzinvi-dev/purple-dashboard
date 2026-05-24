@@ -6,7 +6,6 @@ import {
   type AudioNote,
   loadAudioLibrary,
   subscribeToAudioLibrary,
-  importAudioFiles,
 } from "./audioLibrary";
 
 // Lazy-load page components — initial dashboard renders fast.
@@ -144,7 +143,6 @@ export default function PurpleDashboard() {
   const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
 
   const audioRef = useRef<HTMLAudioElement>(null);
-  const fileRef  = useRef<HTMLInputElement>(null);
   const seekRef  = useRef<HTMLDivElement>(null);
   const jTimer   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const q        = QUOTES[new Date().getDate() % QUOTES.length];
@@ -311,8 +309,15 @@ export default function PurpleDashboard() {
   const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio) return;
-    // Empty library — bounce to the upload picker so they can add audio.
-    if (!audioLibrary.length) { fileRef.current?.click(); return; }
+    // Empty library — point them at the audio notes page (the inner 🎵 tab),
+    // which is the single source of truth for adding/managing audio. The
+    // home music card is play-only by design so users don't have two places
+    // to "create" tracks from.
+    if (!audioLibrary.length) {
+      setActiveTab("music");
+      setOverlayPage("audio");
+      return;
+    }
     if (playing) audio.pause();
     else { try { await audio.play(); } catch { void 0; } }
   };
@@ -320,17 +325,6 @@ export default function PurpleDashboard() {
   const skip = (d: number) => {
     if (!audioLibrary.length) return;
     setCurIdx(i => (i + d + audioLibrary.length) % audioLibrary.length);
-  };
-
-  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (e.target) e.target.value = "";
-    if (!files.length) return;
-    const before = audioLibrary.length;
-    const result = await importAudioFiles(files);
-    // The subscription above will refresh audioLibrary; jump to the first new
-    // track if this was a fresh library or the user just added their first.
-    if (result.added && before === 0) setCurIdx(0);
   };
 
   const seekAudio = (e: React.MouseEvent) => {
@@ -433,7 +427,6 @@ export default function PurpleDashboard() {
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
       />
-      <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={handleFiles} />
 
       {/* Offline banner */}
       {!isOnline && (
@@ -615,7 +608,7 @@ export default function PurpleDashboard() {
                   <button onClick={() => setShowPlaylist(false)} className="text-sm bg-transparent border-none cursor-pointer icon-button" style={{ color: "var(--text-muted)" }}>close</button>
                 </div>
                 {audioLibrary.length === 0 ? (
-                  <p className="text-[13px] text-center py-4" style={{ color: "var(--text-muted)" }}>no audio yet — tap ＋ to add 💜</p>
+                  <p className="text-[13px] text-center py-4" style={{ color: "var(--text-muted)" }}>no audio yet — open the library to add some 💜</p>
                 ) : (
                   <div className="max-h-64 overflow-y-auto flex flex-col gap-2">
                     {audioLibrary.map((track, i) => (
@@ -632,15 +625,13 @@ export default function PurpleDashboard() {
                     ))}
                   </div>
                 )}
-                <div className="flex gap-2 mt-4">
-                  <button onClick={() => fileRef.current?.click()}
-                    className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">
-                    ＋ add audio
-                  </button>
+                {/* Library management lives in the audio notes page (the inner 🎵
+                    tab). The home music card is play-only — one source of truth
+                    avoids the "did this audio actually save?" confusion. */}
+                <div className="flex mt-4">
                   <button onClick={() => { setShowPlaylist(false); setActiveTab("music"); setOverlayPage("audio"); }}
-                    className="flex-1 py-3 rounded-2xl text-sm font-semibold icon-button"
-                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)", color: "var(--text-secondary)", cursor: "pointer" }}>
-                    open library
+                    className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">
+                    open audio library
                   </button>
                 </div>
               </div>
@@ -675,7 +666,7 @@ export default function PurpleDashboard() {
                 <div className="shimmer-bg w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">🎵</div>
                 <div className="overflow-hidden flex-1 min-w-0">
                   <p className="text-xs font-semibold text-[#261B40] truncate">{audioLibrary[curIdx]?.title ?? "your audio library"}</p>
-                  <p className="text-[10px] text-[#9685B0] mt-0.5">{audioLibrary.length ? `${audioLibrary.length} track${audioLibrary.length !== 1 ? "s" : ""}` : "tap ＋ to add audio"}</p>
+                  <p className="text-[10px] text-[#9685B0] mt-0.5">{audioLibrary.length ? `${audioLibrary.length} track${audioLibrary.length !== 1 ? "s" : ""}` : "tap ▶ to open library"}</p>
                 </div>
                 <button onClick={() => setShowPlaylist(true)}
                   className="text-sm text-[#B49FD0] tracking-[3px] bg-transparent border-none cursor-pointer">···</button>
@@ -693,9 +684,7 @@ export default function PurpleDashboard() {
                 <span>{fmt(progress)}</span><span>{fmt(duration)}</span>
               </div>
 
-              <div className="flex items-center justify-between">
-                <button onClick={() => fileRef.current?.click()}
-                  className="bg-transparent border-none cursor-pointer text-[#B49FD0] text-lg p-1 icon-button">＋</button>
+              <div className="flex items-center justify-around">
                 <button onClick={() => skip(-1)}
                   className="bg-transparent border-none cursor-pointer text-[#7654A8] text-xl p-1 icon-button">⏮</button>
                 <button onClick={togglePlay}
