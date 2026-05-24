@@ -184,7 +184,7 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
   const total = totalForMode(mode, settings);
   const pct = total > 0 ? ((total - secondsLeft) / total) * 100 : 0;
 
-  const modeLabel = mode === "focus" ? "focus time" : mode === "shortBreak" ? "short break" : "long break";
+  const modeLabel = mode === "focus" ? "focus time" : mode === "shortBreak" ? "short break" : "long focus";
   const modeEmoji = mode === "focus" ? "🌷" : mode === "shortBreak" ? "🍵" : "🌙";
 
   // SVG ring math
@@ -328,7 +328,7 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
                 style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}>
                 {(cycle % settings.cyclesBeforeLong) + (mode === "focus" ? 1 : 0)}/{settings.cyclesBeforeLong}
               </p>
-              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>until long break</p>
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>until long focus</p>
             </div>
           </div>
         </div>
@@ -389,8 +389,8 @@ function SettingsModal({
           {([
             { key: "focus", label: "focus duration", suffix: "min" },
             { key: "shortBreak", label: "short break", suffix: "min" },
-            { key: "longBreak", label: "long break", suffix: "min" },
-            { key: "cyclesBeforeLong", label: "cycles before long break", suffix: "" },
+            { key: "longBreak", label: "long focus", suffix: "min" },
+            { key: "cyclesBeforeLong", label: "cycles before long focus", suffix: "" },
           ] as const).map(({ key, label, suffix }) => (
             <div key={key} className="mb-4 p-3 rounded-2xl"
               style={{ border: "1px solid var(--border-soft)", background: "var(--bg-input)" }}>
