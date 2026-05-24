@@ -1,31 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-
-interface AudioNote {
-  id: string;
-  title: string;
-  dataUrl: string;
-  duration: number;
-  size: number;
-  createdAt: number;
-}
-
-const AUDIO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB per file (localStorage friendly)
-const STORAGE_KEY = "audio_notes_v1";
-
-const ls = {
-  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k: string, v: string) => { try { localStorage.setItem(k, v); return true; } catch { return false; } },
-};
-
-const loadNotes = (): AudioNote[] => {
-  try {
-    const raw = ls.get(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as AudioNote[];
-  } catch {
-    return [];
-  }
-};
+import {
+  type AudioNote,
+  AUDIO_MAX_BYTES,
+  loadAudioLibrary,
+  saveAudioLibrary,
+  subscribeToAudioLibrary,
+  importAudioFiles,
+} from "./audioLibrary";
 
 const fmtDuration = (s: number) => {
   if (!isFinite(s) || s < 0) s = 0;
@@ -40,29 +21,8 @@ const fmtSize = (b: number) => {
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
 };
 
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("could not read file"));
-    reader.readAsDataURL(file);
-  });
-
-const probeDuration = (url: string): Promise<number> =>
-  new Promise(resolve => {
-    const a = new Audio();
-    a.preload = "metadata";
-    let done = false;
-    const finish = (v: number) => { if (!done) { done = true; resolve(v); } };
-    a.onloadedmetadata = () => finish(isFinite(a.duration) ? a.duration : 0);
-    a.onerror = () => finish(0);
-    a.src = url;
-    // Fallback timeout — never hang
-    setTimeout(() => finish(0), 4000);
-  });
-
 export default function AudioNotesPage({ onBack }: { onBack?: () => void } = {}) {
-  const [notes, setNotes] = useState<AudioNote[]>(() => loadNotes());
+  const [notes, setNotes] = useState<AudioNote[]>(() => loadAudioLibrary());
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -74,11 +34,19 @@ export default function AudioNotesPage({ onBack }: { onBack?: () => void } = {})
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Persist via the shared module so the home dashboard's music player
+  // re-syncs in the same render via the broadcast event.
   const persist = (updated: AudioNote[]) => {
     setNotes(updated);
-    const ok = ls.set(STORAGE_KEY, JSON.stringify(updated));
+    const ok = saveAudioLibrary(updated);
     if (!ok) setError("storage full — try deleting older audio notes");
   };
+
+  // Pick up library changes that originate elsewhere (e.g. an upload from the
+  // home music card while this overlay is open).
+  useEffect(() => {
+    return subscribeToAudioLibrary(() => setNotes(loadAudioLibrary()));
+  }, []);
 
   // cleanup playback on unmount
   useEffect(() => {
@@ -110,41 +78,18 @@ export default function AudioNotesPage({ onBack }: { onBack?: () => void } = {})
     setUploading(true);
 
     try {
-      const newOnes: AudioNote[] = [];
-      const skipped: string[] = [];
+      const result = await importAudioFiles(files);
 
-      for (const file of files) {
-        if (!file.type.startsWith("audio/")) {
-          skipped.push(`${file.name} (not audio)`);
-          continue;
-        }
-        if (file.size > AUDIO_MAX_BYTES) {
-          skipped.push(`${file.name} (${fmtSize(file.size)} — over ${fmtSize(AUDIO_MAX_BYTES)} limit)`);
-          continue;
-        }
-        try {
-          const dataUrl = await fileToDataUrl(file);
-          const dur = await probeDuration(dataUrl);
-          newOnes.push({
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            title: file.name.replace(/\.[^/.]+$/, ""),
-            dataUrl,
-            duration: dur,
-            size: file.size,
-            createdAt: Date.now(),
-          });
-        } catch {
-          skipped.push(`${file.name} (could not read)`);
-        }
+      // The subscribe handler refreshes our local `notes` state automatically
+      // since saveAudioLibrary fired the event, so no manual setNotes here.
+      if (result.added) {
+        flashInfo(`added ${result.added} audio note${result.added === 1 ? "" : "s"} 💜`);
       }
-
-      if (newOnes.length) {
-        persist([...newOnes, ...loadNotes()]);
-        flashInfo(`added ${newOnes.length} audio note${newOnes.length === 1 ? "" : "s"} 💜`);
+      if (result.storageFull) {
+        flashError("storage full — try deleting older audio notes");
       }
-
-      if (skipped.length) {
-        flashError(`skipped: ${skipped.join(", ")}`);
+      if (result.skipped.length) {
+        flashError(`skipped: ${result.skipped.join(", ")}`);
       }
     } catch (err) {
       flashError("could not load files — please try again");
