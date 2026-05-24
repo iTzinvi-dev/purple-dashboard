@@ -197,3 +197,181 @@ input:focus, textarea:focus { outline: none; border-color: #C4A8E0 !important; }
 .dark ::placeholder {
   color: rgba(255, 255, 255, 0.55);
 }
+
+
+/* ───────────── Theme variables ───────────── */
+:root {
+  --bg-app: linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%);
+  --bg-page: linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%);
+  --bg-elevated: rgba(237, 229, 250, 0.92);
+  --bg-card: rgba(255, 255, 255, 0.72);
+  --bg-card-soft: rgba(255, 255, 255, 0.45);
+  --bg-input: rgba(255, 255, 255, 0.6);
+  --bg-canvas: rgba(255, 255, 255, 0.6);
+  --text-primary: #261B40;
+  --text-secondary: #5A3E8A;
+  --text-muted: #9685B0;
+  --text-faint: #B49FD0;
+  --border-soft: #DDD3F0;
+  --border-card: rgba(255, 255, 255, 0.7);
+  --accent: #7654A8;
+  --accent-2: #B07ADE;
+  --accent-soft: rgba(118, 84, 168, 0.15);
+  --danger: #C4548A;
+  --danger-bg: rgba(196, 84, 138, 0.1);
+  --shadow-elevated: 0 -4px 28px rgba(118, 84, 168, 0.08);
+}
+
+html.dark {
+  --bg-app: radial-gradient(circle at top, rgba(135, 90, 190, 0.34), transparent 35%), linear-gradient(180deg, #17082E 0%, #0F0620 100%);
+  --bg-page: linear-gradient(180deg, #17082E 0%, #1B0A36 100%);
+  --bg-elevated: rgba(23, 8, 46, 0.94);
+  --bg-card: rgba(35, 15, 68, 0.7);
+  --bg-card-soft: rgba(45, 22, 80, 0.45);
+  --bg-input: rgba(255, 255, 255, 0.06);
+  --bg-canvas: rgba(255, 255, 255, 0.04);
+  --text-primary: #F4E8FF;
+  --text-secondary: #E5D2FA;
+  --text-muted: #B49FD0;
+  --text-faint: #7E6A9E;
+  --border-soft: rgba(255, 255, 255, 0.12);
+  --border-card: rgba(255, 255, 255, 0.08);
+  --accent: #B07ADE;
+  --accent-2: #C9A6F0;
+  --accent-soft: rgba(176, 122, 222, 0.18);
+  --danger: #FF8FAB;
+  --danger-bg: rgba(255, 143, 171, 0.12);
+}
+
+/* Page transitions */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.page-enter { animation: pageEnter 0.3s ease both; will-change: transform, opacity; }
+
+@keyframes overlayBg {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.overlay-bg { animation: overlayBg 0.2s ease both; }
+
+/* Active nav indicator */
+.nav-indicator {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7654A8, #B07ADE);
+  margin-top: 2px;
+  box-shadow: 0 0 8px rgba(118, 84, 168, 0.5);
+  animation: navDot 0.3s ease both;
+}
+@keyframes navDot {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+/* Nicer file-input button reset */
+input[type="file"]::-webkit-file-upload-button { display: none; }
+
+/* Settings tabs */
+.settings-tab {
+  flex: 1;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: color 0.18s, border-color 0.18s;
+}
+.settings-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Help small text in dark mode is visible too */
+.dark ::-webkit-scrollbar-thumb { background: rgba(180, 140, 230, 0.35); }
+
+/* Reduced motion respects */
+@media (prefers-reduced-motion: reduce) {
+  .float, .float2, .float3,
+  .breathe, .breathe2,
+  .twinkle, .twinkle2, .twinkle3,
+  .shimmer-bg,
+  .glass-card,
+  .su0, .su1, .su2, .su3, .su4, .su5, .su6, .su7, .su8 {
+    animation: none !important;
+  }
+  .page-enter { animation: none !important; }
+}
+
+
+/* ───── Dark-mode overrides for hardcoded dashboard colors ───── */
+/* These let the existing dashboard markup adapt without rewrites. */
+
+.dark .text-\[\#261B40\] { color: var(--text-primary) !important; }
+.dark .text-\[\#5A3E8A\] { color: var(--text-secondary) !important; }
+.dark .text-\[\#9685B0\] { color: var(--text-muted) !important; }
+.dark .text-\[\#B49FD0\] { color: var(--text-faint) !important; }
+.dark .text-\[\#7654A8\] { color: var(--accent) !important; }
+.dark .text-\[\#C4A8E0\] { color: var(--text-faint) !important; }
+.dark .text-\[\#C5B4DA\] { color: var(--text-faint) !important; }
+
+.dark .bg-white\/35,
+.dark .bg-white\/40,
+.dark .bg-white\/45,
+.dark .bg-white\/50,
+.dark .bg-white\/55,
+.dark .bg-white\/60,
+.dark .bg-white\/65,
+.dark .bg-white\/70,
+.dark .bg-white\/75,
+.dark .bg-white\/80 { background: var(--bg-input) !important; }
+
+.dark .border-\[\#DDD3F0\] { border-color: var(--border-soft) !important; }
+.dark .border-\[\#C4A8E0\] { border-color: rgba(196, 168, 224, 0.4) !important; }
+
+/* Overlay surface used for full-screen pages */
+.page-surface { background: var(--bg-page); color: var(--text-primary); min-height: 100vh; }
+.page-header  { background: var(--bg-elevated); border-bottom: 1px solid var(--border-card); }
+
+/* Toggles & utility */
+.btn-soft {
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-soft);
+  color: var(--text-secondary);
+  border-radius: 14px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+}
+.btn-soft:hover { transform: translateY(-1px); }
+.btn-soft:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-danger {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  border-radius: 14px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-line {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+}
+.status-line.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
