@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 
 interface Note {
   id: string;
@@ -118,21 +118,25 @@ function applyStyle(ctx: CanvasRenderingContext2D, s: DrawStyleArgs) {
     ctx.globalCompositeOperation = "destination-out";
     ctx.lineWidth = s.width * 3;
     ctx.strokeStyle = "rgba(0,0,0,1)";
+    ctx.fillStyle = "rgba(0,0,0,1)";
     ctx.globalAlpha = 1;
   } else if (s.tool === "highlighter") {
     ctx.globalCompositeOperation = "source-over";
     ctx.lineWidth = s.width * 4;
     ctx.strokeStyle = s.color;
+    ctx.fillStyle = s.color;
     ctx.globalAlpha = 0.3 * s.opacity;
   } else if (s.tool === "pencil") {
     ctx.globalCompositeOperation = "source-over";
     ctx.lineWidth = s.width * 0.8;
     ctx.strokeStyle = s.color;
+    ctx.fillStyle = s.color;
     ctx.globalAlpha = 0.7 * s.opacity;
   } else {
     ctx.globalCompositeOperation = "source-over";
     ctx.lineWidth = s.width;
     ctx.strokeStyle = s.color;
+    ctx.fillStyle = s.color;
     ctx.globalAlpha = s.opacity;
   }
 }
@@ -179,8 +183,17 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
   const [historyVersion, setHistoryVersion] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const cssSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const dprRef = useRef(1);
+
+  // Tool refs to avoid stale closures inside native event listeners
+  const toolRef = useRef<Tool>("pen");
+  const drawColorRef = useRef("#7654A8");
+  const brushSizeRef = useRef(1);
+  const opacityRef = useRef(1);
+  const activeIdRef = useRef<string | null>(null);
 
   // Drawing state — kept in refs to avoid re-renders during stroke
   const strokesRef = useRef<Stroke[]>([]);     // committed strokes (undo source)
@@ -191,6 +204,13 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const active = notes.find(n => n.id === activeId) ?? null;
+
+  // Sync state into refs so native event listeners always read fresh values
+  useEffect(() => { toolRef.current = tool; }, [tool]);
+  useEffect(() => { drawColorRef.current = drawColor; }, [drawColor]);
+  useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
+  useEffect(() => { opacityRef.current = opacity; }, [opacity]);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
   const persistNotes = useCallback((updated: Note[]) => {
     setNotes(updated);
@@ -231,49 +251,76 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
     const ctx = ctxRef.current;
     if (!ctx) return;
     const { w, h } = cssSizeRef.current;
+    if (w <= 0 || h <= 0) return;
+    ctx.save();
+    ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
     ctx.clearRect(0, 0, w, h);
     if (baseImgRef.current) {
       ctx.drawImage(baseImgRef.current, 0, 0, w, h);
     }
     for (const st of strokesRef.current) drawSmoothStroke(ctx, st);
+    ctx.restore();
   }, []);
 
-  // ── Canvas (re)init when entering draw tab or switching note ──
-  useEffect(() => {
-    if (tab !== "draw" || !canvasRef.current) return;
+  // ── Canvas resize / init — useLayoutEffect runs BEFORE paint, so the canvas
+  // always has correct dimensions before the user can interact. ResizeObserver
+  // handles any later resize (orientation, window) without losing the drawing.
+  useLayoutEffect(() => {
+    if (tab !== "draw") return;
     const canvas = canvasRef.current;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const cssW = canvas.offsetWidth;
-    const cssH = canvas.offsetHeight;
-    canvas.width = Math.floor(cssW * dpr);
-    canvas.height = Math.floor(cssH * dpr);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctxRef.current = ctx;
-    cssSizeRef.current = { w: cssW, h: cssH };
+    const wrapper = canvasWrapperRef.current;
+    if (!canvas || !wrapper) return;
 
-    // Reset history for the new note
+    const setupCanvas = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = wrapper.getBoundingClientRect();
+      // Defensive fallback: if wrapper isn't laid out yet, use a sensible default
+      const cssW = rect.width  > 0 ? rect.width  : (window.innerWidth || 320);
+      const cssH = rect.height > 0 ? rect.height : 360;
+
+      canvas.width  = Math.max(1, Math.floor(cssW * dpr));
+      canvas.height = Math.max(1, Math.floor(cssH * dpr));
+      canvas.style.width  = `${cssW}px`;
+      canvas.style.height = `${cssH}px`;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctxRef.current = ctx;
+      cssSizeRef.current = { w: cssW, h: cssH };
+      dprRef.current = dpr;
+
+      // Re-render existing content from history + base image
+      rerender();
+    };
+
+    setupCanvas();
+    const ro = new ResizeObserver(() => setupCanvas());
+    ro.observe(wrapper);
+
+    return () => ro.disconnect();
+  }, [tab, rerender]);
+
+  // Load note's saved drawing as the base image when the active note changes
+  useEffect(() => {
+    if (tab !== "draw") return;
     strokesRef.current = [];
     redoRef.current = [];
     setHistoryVersion(v => v + 1);
 
     if (active?.drawing) {
       const img = new Image();
-      img.onload = () => {
-        baseImgRef.current = img;
-        rerender();
-      };
-      img.onerror = () => {
-        baseImgRef.current = null;
-        rerender();
-      };
+      img.onload = () => { baseImgRef.current = img; rerender(); };
+      img.onerror = () => { baseImgRef.current = null; rerender(); };
       img.src = active.drawing;
     } else {
       baseImgRef.current = null;
-      ctx.clearRect(0, 0, cssW, cssH);
+      rerender();
     }
-  }, [tab, activeId, active?.drawing, rerender]);
+    // We deliberately ignore the active.drawing dep so that our own debounced
+    // saves don't bounce back and wipe in-progress strokes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeId]);
 
   useEffect(() => {
     return () => {
@@ -284,109 +331,122 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
   const queueSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      if (!canvasRef.current || !active) return;
-      const dataUrl = canvasToBest(canvasRef.current);
-      updateNote(active.id, { drawing: dataUrl });
+      const canvas = canvasRef.current;
+      const id = activeIdRef.current;
+      if (!canvas || !id) return;
+      const dataUrl = canvasToBest(canvas);
+      updateNote(id, { drawing: dataUrl });
     }, SAVE_DEBOUNCE_MS);
-  }, [active, updateNote]);
+  }, [updateNote]);
 
-  // ── Pointer handlers ──
-  const getPos = (e: React.PointerEvent | PointerEvent): { x: number; y: number } => {
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  };
+  // ── Native pointer event listeners attached directly to the canvas DOM node ──
+  // Native non-passive listeners are more reliable than React synthetic events
+  // for drawing (some mobile browsers throttle synthetics or treat them as
+  // passive, which silently breaks preventDefault).
+  useEffect(() => {
+    if (tab !== "draw") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (!canvasRef.current || !ctxRef.current) return;
-    e.preventDefault();
-    canvasRef.current.setPointerCapture(e.pointerId);
-    isDrawingRef.current = true;
-
-    const stroke: Stroke = {
-      tool,
-      color: drawColor,
-      width: BRUSH_SIZES[brushSize],
-      opacity,
-      points: [getPos(e)],
+    const getPos = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     };
-    currentStrokeRef.current = stroke;
 
-    // Draw initial dot so a tap leaves a mark
-    const ctx = ctxRef.current;
-    applyStyle(ctx, stroke);
-    ctx.beginPath();
-    ctx.arc(stroke.points[0].x, stroke.points[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
-    ctx.fillStyle = ctx.strokeStyle as string;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== undefined && e.button !== 0) return; // only primary
+      const ctx = ctxRef.current;
+      if (!ctx) return;
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      isDrawingRef.current = true;
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!isDrawingRef.current || !ctxRef.current) return;
-    const stroke = currentStrokeRef.current;
-    if (!stroke) return;
-    e.preventDefault();
+      const stroke: Stroke = {
+        tool: toolRef.current,
+        color: drawColorRef.current,
+        width: BRUSH_SIZES[brushSizeRef.current],
+        opacity: opacityRef.current,
+        points: [getPos(e)],
+      };
+      currentStrokeRef.current = stroke;
 
-    // Pull all coalesced events for accurate strokes (especially fast movement)
-    const native = e.nativeEvent;
-    const events = (native as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] })
-      .getCoalescedEvents?.() ?? [native as PointerEvent];
+      // Tap leaves a mark
+      applyStyle(ctx, stroke);
+      ctx.beginPath();
+      ctx.arc(stroke.points[0].x, stroke.points[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    };
 
-    const ctx = ctxRef.current;
-    applyStyle(ctx, stroke);
+    const onMove = (e: PointerEvent) => {
+      if (!isDrawingRef.current) return;
+      const ctx = ctxRef.current;
+      const stroke = currentStrokeRef.current;
+      if (!ctx || !stroke) return;
+      e.preventDefault();
 
-    for (const ev of events) {
-      const pos = getPos(ev);
-      const last = stroke.points[stroke.points.length - 1];
+      const events = (e as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] })
+        .getCoalescedEvents?.() ?? [e];
 
-      // Skip points that are too close (saves work, reduces jitter)
-      const dx = pos.x - last.x;
-      const dy = pos.y - last.y;
-      if (dx * dx + dy * dy < 1.5) continue;
+      applyStyle(ctx, stroke);
+      for (const ev of events) {
+        const pos = getPos(ev);
+        const last = stroke.points[stroke.points.length - 1];
+        const dx = pos.x - last.x;
+        const dy = pos.y - last.y;
+        if (dx * dx + dy * dy < 1) continue;
+        stroke.points.push(pos);
 
-      stroke.points.push(pos);
-
-      // Draw incremental smooth segment using midpoints
-      if (stroke.points.length >= 3) {
-        const a = stroke.points[stroke.points.length - 3];
-        const b = stroke.points[stroke.points.length - 2];
-        const c = stroke.points[stroke.points.length - 1];
-        const m1 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        const m2 = { x: (b.x + c.x) / 2, y: (b.y + c.y) / 2 };
-        ctx.beginPath();
-        ctx.moveTo(m1.x, m1.y);
-        ctx.quadraticCurveTo(b.x, b.y, m2.x, m2.y);
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(last.x, last.y);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
+        if (stroke.points.length >= 3) {
+          const a = stroke.points[stroke.points.length - 3];
+          const b = stroke.points[stroke.points.length - 2];
+          const c = stroke.points[stroke.points.length - 1];
+          const m1 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const m2 = { x: (b.x + c.x) / 2, y: (b.y + c.y) / 2 };
+          ctx.beginPath();
+          ctx.moveTo(m1.x, m1.y);
+          ctx.quadraticCurveTo(b.x, b.y, m2.x, m2.y);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(last.x, last.y);
+          ctx.lineTo(pos.x, pos.y);
+          ctx.stroke();
+        }
       }
-    }
-    ctx.globalAlpha = 1;
-  };
+      ctx.globalAlpha = 1;
+    };
 
-  const onPointerUp = (e: React.PointerEvent) => {
-    if (!isDrawingRef.current) return;
-    isDrawingRef.current = false;
-    if (canvasRef.current) {
-      try { canvasRef.current.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    }
-    const stroke = currentStrokeRef.current;
-    if (stroke && stroke.points.length > 0) {
-      strokesRef.current.push(stroke);
-      // cap depth — drop oldest (gets baked into baseImg implicitly later)
-      if (strokesRef.current.length > MAX_UNDO_DEPTH) {
-        strokesRef.current.shift();
+    const onUp = (e: PointerEvent) => {
+      if (!isDrawingRef.current) return;
+      isDrawingRef.current = false;
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      const stroke = currentStrokeRef.current;
+      if (stroke && stroke.points.length > 0) {
+        strokesRef.current.push(stroke);
+        if (strokesRef.current.length > MAX_UNDO_DEPTH) strokesRef.current.shift();
+        redoRef.current = [];
+        setHistoryVersion(v => v + 1);
       }
-      redoRef.current = [];          // any new stroke wipes the redo stack
-      setHistoryVersion(v => v + 1);
-    }
-    currentStrokeRef.current = null;
-    queueSave();
-  };
+      currentStrokeRef.current = null;
+      queueSave();
+    };
+
+    const opts: AddEventListenerOptions = { passive: false };
+    canvas.addEventListener("pointerdown", onDown, opts);
+    canvas.addEventListener("pointermove", onMove, opts);
+    canvas.addEventListener("pointerup", onUp, opts);
+    canvas.addEventListener("pointercancel", onUp, opts);
+    canvas.addEventListener("pointerleave", onUp, opts);
+
+    return () => {
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onUp);
+      canvas.removeEventListener("pointerleave", onUp);
+    };
+  }, [tab, queueSave]);
 
   const undo = () => {
     if (strokesRef.current.length === 0) return;
@@ -716,20 +776,32 @@ export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
                       </div>
                     </div>
 
-                    {/* Canvas */}
-                    <canvas ref={canvasRef}
+                    {/* Canvas — wrapper has explicit relative positioning,
+                        canvas absolutely fills it. This guarantees correct
+                        dimensions even if flex layout would otherwise leave
+                        the canvas at 0×0 on first render. Native pointer
+                        listeners are attached via useEffect above. */}
+                    <div ref={canvasWrapperRef}
                       style={{
-                        flex: 1, width: "100%", touchAction: "none",
+                        flex: 1,
+                        position: "relative",
+                        minHeight: 240,
                         background: "var(--bg-canvas)",
-                        cursor: tool === "eraser" ? "cell" : "crosshair",
-                      }}
-                      onPointerDown={onPointerDown}
-                      onPointerMove={onPointerMove}
-                      onPointerUp={onPointerUp}
-                      onPointerCancel={onPointerUp}
-                      onPointerLeave={onPointerUp}
-                    />
-
+                        touchAction: "none",
+                        overflow: "hidden",
+                      }}>
+                      <canvas ref={canvasRef}
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          display: "block",
+                          touchAction: "none",
+                          cursor: tool === "eraser" ? "cell" : "crosshair",
+                        }}
+                      />
+                    </div>
                     {/* Hidden marker so React tracks history changes for the buttons */}
                     <span style={{ display: "none" }} data-history={historyVersion} />
                   </div>
