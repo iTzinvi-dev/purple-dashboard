@@ -4,6 +4,23 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  build: {
+    // Faster repeat-loads: long-cacheable vendor chunk so app updates don't bust React.
+    rollupOptions: {
+      output: {
+        manualChunks: (id: string) => {
+          if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) {
+            return 'react';
+          }
+          return undefined;
+        },
+      },
+    },
+    // Trim unused CSS keyframe metadata for a tighter PWA payload.
+    cssCodeSplit: true,
+    target: 'es2020',
+    reportCompressedSize: false,
+  },
   plugins: [
     tailwindcss(),
     react(),

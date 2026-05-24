@@ -269,7 +269,8 @@ export default function AudioNotesPage({ onBack }: { onBack?: () => void } = {})
               </span>
             </div>
 
-            {notes.map(note => {
+            <div className="list-stagger" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {notes.map(note => {
               const isPlaying = playingId === note.id;
               const pct = isPlaying && duration > 0 ? (progress / duration) * 100 : 0;
               return (
@@ -324,7 +325,8 @@ export default function AudioNotesPage({ onBack }: { onBack?: () => void } = {})
                   </div>
                 </div>
               );
-            })}
+              })}
+            </div>
           </div>
         )}
       </div>

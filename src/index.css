@@ -441,6 +441,190 @@ button .ripple {
 .glass-card { contain: layout style; }
 
 
+/* ───────────── Tap feedback on every card (subtle, fast) ───────────── */
+.glass-card { cursor: default; }
+.glass-card:active { transform: scale(0.985); }
+
+
+/* ───────────── Tab content morph (re-mounts via key) ───────────── */
+@keyframes tabContent {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.tab-content {
+  animation: tabContent 0.22s var(--t-bezier) both;
+  will-change: transform, opacity;
+}
+
+
+/* ───────────── Pop-in for new list items ───────────── */
+@keyframes popIn {
+  0%   { opacity: 0; transform: scale(0.85) translate3d(0, 6px, 0); }
+  60%  { transform: scale(1.04) translate3d(0, -1px, 0); }
+  100% { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+}
+.pop-in { animation: popIn 0.34s var(--t-bezier) both; }
+
+
+/* ───────────── List stagger — auto-cascades children ───────────── */
+.list-stagger > * {
+  animation: slideUp 0.30s var(--t-bezier) both;
+  will-change: transform, opacity;
+}
+.list-stagger > *:nth-child(1)  { animation-delay: 0.02s; }
+.list-stagger > *:nth-child(2)  { animation-delay: 0.05s; }
+.list-stagger > *:nth-child(3)  { animation-delay: 0.08s; }
+.list-stagger > *:nth-child(4)  { animation-delay: 0.11s; }
+.list-stagger > *:nth-child(5)  { animation-delay: 0.14s; }
+.list-stagger > *:nth-child(6)  { animation-delay: 0.17s; }
+.list-stagger > *:nth-child(7)  { animation-delay: 0.20s; }
+.list-stagger > *:nth-child(8)  { animation-delay: 0.23s; }
+.list-stagger > *:nth-child(n+9) { animation-delay: 0.26s; }
+
+
+/* ───────────── Selectable option chip (color, font, mood) ───────────── */
+.option-chip {
+  transition: transform var(--t-fast) var(--t-bezier),
+              background var(--t-fast) ease,
+              border-color var(--t-fast) ease,
+              box-shadow var(--t-fast) ease;
+}
+@media (hover: hover) {
+  .option-chip:hover { transform: translate3d(0, -1px, 0) scale(1.04); }
+}
+.option-chip:active { transform: scale(0.92); }
+.option-chip.is-selected {
+  animation: selectedSpring 0.32s var(--t-bezier);
+}
+@keyframes selectedSpring {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.10); }
+  100% { transform: scale(1); }
+}
+
+
+/* ───────────── Productivity — animated mode switcher pill ───────────── */
+.mode-rail {
+  display: flex;
+  gap: 0;
+  position: relative;
+}
+.mode-pill {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #7654A8, #A870D8);
+  box-shadow: 0 4px 14px rgba(120, 80, 190, 0.28);
+  transition: left 0.36s cubic-bezier(0.34, 1.36, 0.64, 1),
+              width 0.36s cubic-bezier(0.34, 1.36, 0.64, 1);
+  pointer-events: none;
+  z-index: 0;
+  will-change: left, width;
+}
+.dark .mode-pill { background: linear-gradient(135deg, #7B4FCE, #AE7EE8); }
+.mode-tab {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  padding: 10px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 14px;
+  transition: color var(--t-fast) ease;
+}
+
+
+/* ───────────── Productivity — soft pulse around running ring ───────────── */
+.timer-ring { position: relative; }
+.timer-ring::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(176, 122, 222, 0.25) 0%, transparent 65%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.timer-ring.is-running::before {
+  opacity: 1;
+  animation: timerPulse 2.4s ease-in-out infinite;
+}
+@keyframes timerPulse {
+  0%, 100% { transform: scale(0.96); opacity: 0.5; }
+  50%      { transform: scale(1.04); opacity: 1; }
+}
+
+
+/* ───────────── Mode emoji pop on switch ───────────── */
+@keyframes modeEmojiPop {
+  0%   { opacity: 0; transform: scale(0.5) rotate(-12deg); }
+  60%  { transform: scale(1.18) rotate(6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.mode-emoji-pop {
+  display: inline-block;
+  animation: modeEmojiPop 0.42s var(--t-bezier) both,
+             float 4.2s ease-in-out 0.42s infinite;
+  will-change: transform;
+}
+
+
+/* ───────────── Notes/Settings — animated tab underline ───────────── */
+.tab-rail-underline {
+  position: relative;
+}
+.tab-rail-underline .tab-pill {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: left 0.32s cubic-bezier(0.34, 1.36, 0.64, 1),
+              width 0.32s cubic-bezier(0.34, 1.36, 0.64, 1);
+  will-change: left, width;
+}
+
+
+/* ───────────── Stat cards — number scale-in ───────────── */
+@keyframes statNumber {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.stat-number { animation: statNumber 0.42s var(--t-bezier) 0.1s both; display: inline-block; }
+
+
+/* ───────────── Bottom nav — smoother active indicator ───────────── */
+.nav-button { transition: transform 0.22s var(--t-bezier), opacity 0.22s ease; }
+.nav-button .nav-icon {
+  display: inline-block;
+  transition: transform 0.28s cubic-bezier(0.34, 1.36, 0.64, 1), font-size 0.2s ease;
+}
+
+
+/* ───────────── Reduced motion — turn off everything continuous ───────────── */
+@media (prefers-reduced-motion: reduce) {
+  .pop-in,
+  .selected-spring,
+  .tab-content,
+  .list-stagger > *,
+  .mode-emoji-pop,
+  .stat-number,
+  .timer-ring.is-running::before {
+    animation: none !important;
+    transition: none !important;
+  }
+  .mode-pill,
+  .tab-rail-underline .tab-pill {
+    transition: none !important;
+  }
+  .option-chip { transition: none !important; }
+}
+
+
 
 /* ───────────── PWA toast (offline ready / updates) ───────────── */
 @keyframes toastSlide {
