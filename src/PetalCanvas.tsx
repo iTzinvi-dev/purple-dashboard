@@ -27,21 +27,12 @@ function drawPetal(ctx: CanvasRenderingContext2D, p: Petal) {
     ctx.bezierCurveTo(-p.size,        p.size * 0.2, -p.size * 0.8, -p.size * 0.8, 0, -p.size);
     ctx.fillStyle = p.color;
     ctx.fill();
-
-    // Notch at top
-    ctx.beginPath();
-    ctx.moveTo(-p.size * 0.15, -p.size * 0.9);
-    ctx.quadraticCurveTo(0, -p.size * 0.7, p.size * 0.15, -p.size * 0.9);
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.fill();
-
   } else if (p.type === 1) {
     // Round petal
     ctx.beginPath();
     ctx.ellipse(0, 0, p.size * 0.55, p.size, 0, 0, Math.PI * 2);
     ctx.fillStyle = p.color;
     ctx.fill();
-
   } else {
     // Thin long petal
     ctx.beginPath();
@@ -51,12 +42,6 @@ function drawPetal(ctx: CanvasRenderingContext2D, p: Petal) {
     ctx.fillStyle = p.color;
     ctx.fill();
   }
-
-  // Soft inner glow
-  ctx.beginPath();
-  ctx.ellipse(0, -p.size * 0.2, p.size * 0.25, p.size * 0.35, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255,255,255,0.2)";
-  ctx.fill();
 
   ctx.restore();
 }
@@ -89,44 +74,87 @@ export default function PetalCanvas() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Respect user motion preferences — render static once and stop
+    const prefersReducedMotion = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     let W = window.innerWidth;
     let H = window.innerHeight;
-    canvas.width = W; canvas.height = H;
-
-    const COUNT = Math.min(38, Math.floor((W * H) / 14000));
-    const petals: Petal[] = Array.from({ length: COUNT }, () => newPetal(W, H));
-    let t = 0, raf: number;
-
-    const onResize = () => {
+    const setSize = () => {
       W = window.innerWidth; H = window.innerHeight;
-      canvas.width = W; canvas.height = H;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
+    setSize();
+
+    // Lighter on mobile / smaller screens
+    const isMobile = W < 600;
+    const COUNT = Math.min(isMobile ? 18 : 28, Math.floor((W * H) / 22000));
+    const petals: Petal[] = Array.from({ length: COUNT }, () => newPetal(W, H));
+    let t = 0, raf = 0;
+
+    const onResize = () => setSize();
     window.addEventListener("resize", onResize);
 
-    const tick = () => {
+    // Pause when tab is hidden — saves battery
+    let paused = false;
+    const onVisibility = () => {
+      paused = document.hidden;
+      if (!paused && !prefersReducedMotion) {
+        last = performance.now();
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    // Throttle to ~30fps for smoother feel without overdraw
+    const targetMs = 1000 / 30;
+    let last = performance.now();
+
+    const tick = (now: number = performance.now()) => {
+      if (paused) return;
+      const dt = now - last;
+      if (dt < targetMs) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      last = now - (dt % targetMs);
+
       ctx.clearRect(0, 0, W, H);
       t++;
-      petals.forEach(p => {
+      for (let i = 0; i < petals.length; i++) {
+        const p = petals[i];
         p.x += p.speedX + Math.sin(t * p.swaySpeed + p.swayOffset) * 0.5;
         p.y += p.speedY;
         p.rotation += p.rotSpeed;
         if (p.y > H + 20 || p.x < -40 || p.x > W + 40)
           Object.assign(p, newPetal(W, H, true));
         drawPetal(ctx, p);
-      });
-      if (t % 80 === 0 && petals.length < COUNT + 8)
-        petals.push(newPetal(W, H, true));
+      }
       raf = requestAnimationFrame(tick);
     };
-    tick();
 
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", onResize); };
+    if (prefersReducedMotion) {
+      // One static frame
+      ctx.clearRect(0, 0, W, H);
+      petals.forEach(p => drawPetal(ctx, p));
+    } else {
+      raf = requestAnimationFrame(tick);
+    }
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   return (
     <canvas ref={ref} style={{
       position: "fixed", inset: 0, zIndex: 0,
-      pointerEvents: "none", opacity: 0.75,
+      pointerEvents: "none", opacity: 0.7,
     }} />
   );
 }

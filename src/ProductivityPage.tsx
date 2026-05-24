@@ -74,7 +74,7 @@ const playChime = () => {
   }
 };
 
-export default function ProductivityPage() {
+export default function ProductivityPage({ onBack }: { onBack?: () => void } = {}) {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [mode, setMode] = useState<Mode>("focus");
   const [secondsLeft, setSecondsLeft] = useState(() => loadSettings().focus * 60);
@@ -171,10 +171,14 @@ export default function ProductivityPage() {
   const ringOffset = ringCirc - (pct / 100) * ringCirc;
 
   return (
-    <div className="px-3.5 pt-5 pb-2 flex flex-col gap-4">
+    <div className="px-3.5 pt-5 pb-24 flex flex-col gap-4" style={{ minHeight: "100vh", background: "linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%)" }}>
       {/* Header */}
       <div className="su0 flex items-center justify-between gap-3 px-1">
         <div className="flex items-center gap-3">
+          {onBack && (
+            <button onClick={onBack}
+              style={{ background: "rgba(255,255,255,.6)", border: "1px solid rgba(255,255,255,.9)", borderRadius: "50%", width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, flexShrink: 0 }}>←</button>
+          )}
           <span className="text-[34px] breathe">⏳</span>
           <div>
             <p className="text-xs text-[#9685B0] font-medium">productivity</p>
