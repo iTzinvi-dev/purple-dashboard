@@ -12,7 +12,7 @@ interface Settings {
 const DEFAULTS: Settings = {
   focus: 25,
   shortBreak: 5,
-  longBreak: 15,
+  longBreak: 60,
   cyclesBeforeLong: 4,
 };
 
