@@ -2,6 +2,12 @@ import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import PetalCanvas from "./PetalCanvas";
 import { approximateBytes, clearAll, formatBytes } from "./storage";
 import { downloadJsonBackup, importJsonFile } from "./backup";
+import {
+  type AudioNote,
+  loadAudioLibrary,
+  subscribeToAudioLibrary,
+  importAudioFiles,
+} from "./audioLibrary";
 
 // Lazy-load page components — initial dashboard renders fast.
 const NotesPage        = lazy(() => import("./NotesPage"));
@@ -108,7 +114,10 @@ export default function PurpleDashboard() {
   const [tempDarkMode, setTempDarkMode] = useState(() => getJson("darkMode", false));
   const [showSettings, setShowSettings] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
-  const [playlist,     setPlaylist]     = useState<{ name: string; url: string }[]>([]);
+  // Music player draws its tracks from the shared audio notes library so the
+  // home dashboard and the audio notes page stay in sync — uploads from either
+  // place flow into the same store.
+  const [audioLibrary, setAudioLibrary] = useState<AudioNote[]>(() => loadAudioLibrary());
   const [curIdx,       setCurIdx]       = useState(0);
   const [playing,      setPlaying]      = useState(false);
   const [duration,     setDuration]     = useState(0);
@@ -260,50 +269,71 @@ export default function PurpleDashboard() {
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
-  // Music playlist plumbing
+  // Subscribe to audio library changes (uploads/deletes from anywhere in the
+  // app, including the audio notes page) so the home player stays in sync.
+  useEffect(() => {
+    const reload = () => {
+      const next = loadAudioLibrary();
+      setAudioLibrary(next);
+      // If the currently selected track was removed (or library is empty),
+      // clamp the index and stop playback so the audio element doesn't keep
+      // a stale src.
+      setCurIdx(i => {
+        if (next.length === 0) return 0;
+        return Math.min(i, next.length - 1);
+      });
+      if (next.length === 0) {
+        audioRef.current?.pause();
+      }
+    };
+    return subscribeToAudioLibrary(reload);
+  }, []);
+
+  // Wire the <audio> element to whatever track is currently selected.
+  // Recreating the src on track change forces a reload; we preserve play state
+  // so navigating prev/next while playing keeps playing.
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !playlist[curIdx]) return;
+    const track = audioLibrary[curIdx];
+    if (!audio) return;
+    if (!track) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      return;
+    }
     const wasPlaying = playing;
-    audio.src = playlist[curIdx].url;
+    audio.src = track.dataUrl;
     audio.load();
     if (wasPlaying) audio.play().catch(() => { void 0; });
-  }, [curIdx, playlist, playing]);
+    // We deliberately key off the track id so swapping libraries (e.g. delete
+    // then re-add) still triggers the reload even if curIdx didn't change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curIdx, audioLibrary[curIdx]?.id]);
 
   const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (!playlist.length) { fileRef.current?.click(); return; }
-    if (!audio.src || audio.src === window.location.href) {
-      audio.src = playlist[curIdx].url;
-      audio.load();
-    }
+    // Empty library — bounce to the upload picker so they can add audio.
+    if (!audioLibrary.length) { fileRef.current?.click(); return; }
     if (playing) audio.pause();
     else { try { await audio.play(); } catch { void 0; } }
   };
 
   const skip = (d: number) => {
-    if (!playlist.length) return;
-    setCurIdx(i => (i + d + playlist.length) % playlist.length);
+    if (!audioLibrary.length) return;
+    setCurIdx(i => (i + d + audioLibrary.length) % audioLibrary.length);
   };
 
-  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files  = Array.from(e.target.files ?? []);
-    const tracks = files.map(f => ({ name: f.name.replace(/\.[^/.]+$/, ""), url: URL.createObjectURL(f) }));
-    setPlaylist(p => {
-      const upd = [...p, ...tracks];
-      if (!p.length) setCurIdx(0);
-      return upd;
-    });
-  };
-
-  const removeSong = (idx: number) => {
-    setPlaylist(p => {
-      const upd = p.filter((_, i) => i !== idx);
-      if (curIdx >= upd.length) setCurIdx(Math.max(0, upd.length - 1));
-      return upd;
-    });
-    if (playlist.length <= 1) { audioRef.current?.pause(); setPlaying(false); }
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (e.target) e.target.value = "";
+    if (!files.length) return;
+    const before = audioLibrary.length;
+    const result = await importAudioFiles(files);
+    // The subscription above will refresh audioLibrary; jump to the first new
+    // track if this was a fresh library or the user just added their first.
+    if (result.added && before === 0) setCurIdx(0);
   };
 
   const seekAudio = (e: React.MouseEvent) => {
@@ -625,30 +655,35 @@ export default function PurpleDashboard() {
                   <h3 className="text-lg font-medium italic" style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}>🎵 playlist</h3>
                   <button onClick={() => setShowPlaylist(false)} className="text-sm bg-transparent border-none cursor-pointer icon-button" style={{ color: "var(--text-muted)" }}>close</button>
                 </div>
-                {playlist.length === 0 ? (
-                  <p className="text-[13px] text-center py-4" style={{ color: "var(--text-muted)" }}>no songs yet — tap ＋ to add 💜</p>
+                {audioLibrary.length === 0 ? (
+                  <p className="text-[13px] text-center py-4" style={{ color: "var(--text-muted)" }}>no audio yet — tap ＋ to add 💜</p>
                 ) : (
                   <div className="max-h-64 overflow-y-auto flex flex-col gap-2">
-                    {playlist.map((track, i) => (
-                      <div key={i} className="interactive-option flex items-center gap-3 p-3 rounded-2xl"
+                    {audioLibrary.map((track, i) => (
+                      <div key={track.id} className="interactive-option flex items-center gap-3 p-3 rounded-2xl"
                         style={{ background: i === curIdx ? "var(--accent-soft)" : "var(--bg-input)" }}>
                         <button onClick={() => { setCurIdx(i); setShowPlaylist(false); }}
                           className="bg-transparent border-none cursor-pointer text-base p-0 leading-none icon-button">
                           {i === curIdx ? "💜" : "🤍"}
                         </button>
                         <span className="flex-1 text-[12px] truncate" style={{ color: i === curIdx ? "var(--accent)" : "var(--text-primary)", fontWeight: i === curIdx ? 600 : 400 }}>
-                          {track.name}
+                          {track.title}
                         </span>
-                        <button onClick={() => removeSong(i)}
-                          className="bg-transparent border-none cursor-pointer text-[13px] px-1 icon-button" style={{ color: "var(--text-faint)" }}>✕</button>
                       </div>
                     ))}
                   </div>
                 )}
-                <button onClick={() => fileRef.current?.click()}
-                  className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">
-                  ＋ add songs
-                </button>
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => fileRef.current?.click()}
+                    className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">
+                    ＋ add audio
+                  </button>
+                  <button onClick={() => { setShowPlaylist(false); setActiveTab("music"); setOverlayPage("audio"); }}
+                    className="flex-1 py-3 rounded-2xl text-sm font-semibold icon-button"
+                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-soft)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                    open library
+                  </button>
+                </div>
               </div>
             </GL>
           </div>
@@ -680,8 +715,8 @@ export default function PurpleDashboard() {
               <div className="flex gap-3 items-center mb-4">
                 <div className="shimmer-bg w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">🎵</div>
                 <div className="overflow-hidden flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-[#261B40] truncate">{playlist[curIdx]?.name ?? "city of stars"}</p>
-                  <p className="text-[10px] text-[#9685B0] mt-0.5">{playlist.length ? `${playlist.length} track${playlist.length !== 1 ? "s" : ""}` : "dreamy playlist"}</p>
+                  <p className="text-xs font-semibold text-[#261B40] truncate">{audioLibrary[curIdx]?.title ?? "your audio library"}</p>
+                  <p className="text-[10px] text-[#9685B0] mt-0.5">{audioLibrary.length ? `${audioLibrary.length} track${audioLibrary.length !== 1 ? "s" : ""}` : "tap ＋ to add audio"}</p>
                 </div>
                 <button onClick={() => setShowPlaylist(true)}
                   className="text-sm text-[#B49FD0] tracking-[3px] bg-transparent border-none cursor-pointer">···</button>
