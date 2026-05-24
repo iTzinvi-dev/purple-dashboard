@@ -81,7 +81,7 @@ const loadNotes = (): Note[] => {
   }
 };
 
-export default function NotesPage({ onBack }: { onBack: () => void }) {
+export default function NotesPage({ onBack }: { onBack?: () => void } = {}) {
   const [notes, setNotes] = useState<Note[]>(() => loadNotes());
   const [activeId, setActiveId] = useState<string | null>(() => loadNotes()[0]?.id ?? null);
   const [tab, setTab] = useState<"write" | "style" | "draw">("write");
@@ -220,12 +220,14 @@ export default function NotesPage({ onBack }: { onBack: () => void }) {
     return `${Math.floor(diff / 86400000)}d ago`;
   };
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%)", fontFamily: "'DM Sans', system-ui, sans-serif", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", height: "100%", background: "linear-gradient(150deg, #EDE5FA 0%, #E0D4F5 45%, #D9CCF2 100%)", fontFamily: "'DM Sans', system-ui, sans-serif", display: "flex", flexDirection: "column" }}>
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 16px 8px", background: "rgba(237,229,250,.9)", backdropFilter: "blur(20px)", borderBottom: "1px solid rgba(255,255,255,.7)" }}>
-        <button onClick={onBack}
-          style={{ background: "rgba(255,255,255,.6)", border: "1px solid rgba(255,255,255,.9)", borderRadius: "50%", width: "38px", height: "38px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: "18px", flexShrink: 0 }}>←</button>
+        {onBack && (
+          <button onClick={onBack}
+            style={{ background: "rgba(255,255,255,.6)", border: "1px solid rgba(255,255,255,.9)", borderRadius: "50%", width: "38px", height: "38px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: "18px", flexShrink: 0 }}>←</button>
+        )}
         <h1 style={{ margin: 0, fontSize: "22px", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", color: "#5A3E8A", flex: 1 }}>my notes</h1>
         <button onClick={createNote}
           style={{ background: "linear-gradient(135deg, #7654A8, #A870D8)", border: "none", borderRadius: "14px", padding: "8px 16px", color: "white", cursor: "pointer", fontSize: "13px", fontWeight: 600, boxShadow: "0 4px 14px rgba(120,80,190,.3)" }}>+ new</button>
