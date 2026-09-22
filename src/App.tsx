@@ -102,7 +102,7 @@ type Overlay = null | "notes" | "audio" | "productivity" | "star";
 
 export default function PurpleDashboard() {
   const [time, setTime] = useState(new Date());
-  const name = "Pemii";
+  const name = "يا روحي";
   const [todos, setTodos] = useState(() => getJson<typeof DEFAULT_TODOS>("todos", DEFAULT_TODOS));
   const [newTodo, setNewTodo] = useState("");
   const [moods, setMoods] = useState<string[]>(() => getJson<string[]>("moods", []));
