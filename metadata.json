@@ -1,0 +1,5 @@
+{
+  "name": "My Purple Space 💜",
+  "description": "A soft, dreamy space to journal, track your day, and find a little quiet.",
+  "requestFramePermissions": ["geolocation", "microphone"]
+}

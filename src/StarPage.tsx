@@ -1,4 +1,18 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
+import {
+  ArrowLeft,
+  BookOpen,
+  CheckCircle2,
+  Flower2,
+  Headphones,
+  HeartMark,
+  IconBadge,
+  Music2,
+  NotebookPen,
+  Spark,
+  Sparkles,
+  Timer,
+} from "./icons";
 
 interface Note {
   id: string;
@@ -23,7 +37,13 @@ interface PomCount {
 }
 
 const ls = {
-  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+  get: (k: string) => {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
 };
 
 const safeParse = <T,>(key: string, fallback: T): T => {
@@ -49,10 +69,13 @@ const fmtDuration = (s: number) => {
   return `${m}:${String(r).padStart(2, "0")}`;
 };
 
-interface Todo { id: number; text: string; done: boolean; }
+interface Todo {
+  id: number;
+  text: string;
+  done: boolean;
+}
 
 export default function StarPage({ onBack }: { onBack?: () => void } = {}) {
-  // Read everything once on mount — fast, no subscriptions.
   const stats = useMemo(() => {
     const notes = safeParse<Note[]>("notes_v2", []);
     const audio = safeParse<AudioNote[]>("audio_notes_v1", []);
@@ -65,7 +88,7 @@ export default function StarPage({ onBack }: { onBack?: () => void } = {}) {
 
     const totalDuration = audio.reduce((acc, a) => acc + (a.duration || 0), 0);
     const totalAudioSize = audio.reduce((acc, a) => acc + (a.size || 0), 0);
-    const todosDone = todos.filter(t => t.done).length;
+    const todosDone = todos.filter((t) => t.done).length;
     const journalWords = journal.trim() ? journal.trim().split(/\s+/).length : 0;
 
     return {
@@ -81,121 +104,339 @@ export default function StarPage({ onBack }: { onBack?: () => void } = {}) {
     };
   }, []);
 
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <div className="page-surface" style={{ paddingBottom: 96 }}>
-      {/* Header */}
-      <div className="page-header" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 16px 12px" }}>
+      <header
+        className="page-header"
+        style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 16px 12px" }}
+      >
         {onBack && (
-          <button onClick={onBack} aria-label="back" className="icon-button"
-            style={{ background: "var(--bg-card-soft)", border: "1px solid var(--border-card)", borderRadius: "50%", width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: "var(--text-secondary)", flexShrink: 0 }}>←</button>
+          <button
+            onClick={onBack}
+            aria-label="back"
+            className="icon-button"
+            style={{
+              background: "var(--bg-card-soft)",
+              border: "1px solid var(--border-card)",
+              borderRadius: "50%",
+              width: 38,
+              height: 38,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "var(--text-secondary)",
+              flexShrink: 0,
+            }}
+          >
+            <ArrowLeft size={18} strokeWidth={2} />
+          </button>
         )}
         <div style={{ flex: 1 }}>
-          <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>your reflection</p>
-          <h1 style={{ margin: 0, fontSize: 22, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", color: "var(--text-secondary)", lineHeight: 1.1 }}>
-            ⭐ a tiny constellation
+          <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>
+            your reflection
+          </p>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 22,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic",
+              color: "var(--text-secondary)",
+              lineHeight: 1.1,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Sparkles size={18} strokeWidth={1.9} style={{ color: "var(--accent)" }} />
+            <span>a tiny constellation</span>
           </h1>
         </div>
-      </div>
+      </header>
 
-      <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 14 }}>
-
-        {/* Hero — date + sparkle row */}
-        <div className="su0 glass-card" style={{ borderRadius: 26 }}>
+      <main
+        style={{
+          padding: 14,
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+          maxWidth: 430,
+          margin: "0 auto",
+        }}
+      >
+        <section className="su0 glass-card" style={{ borderRadius: 26 }}>
           <div style={{ padding: "20px 18px", textAlign: "center" }}>
-            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-              <span className="twinkle" style={{ fontSize: 14 }}>✨</span>
-              <span className="twinkle2" style={{ fontSize: 18 }}>⭐</span>
-              <span className="twinkle3" style={{ fontSize: 14 }}>✨</span>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 8,
+              }}
+            >
+              <Spark size={12} color="#B49FD0" cls="twinkle" />
+              <Spark size={16} color="var(--accent)" cls="twinkle2" />
+              <Spark size={12} color="#B49FD0" cls="twinkle3" />
             </div>
-            <p className="shimmer-text"
-              style={{ margin: 0, fontSize: 24, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", fontWeight: 600 }}>
+            <p
+              className="shimmer-text"
+              style={{
+                margin: 0,
+                fontSize: 24,
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic",
+                fontWeight: 600,
+              }}
+            >
               you are doing great
             </p>
             <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-muted)" }}>{today}</p>
           </div>
-        </div>
+        </section>
 
-        {/* Stat grid */}
-        <div className="su1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <StatCard icon="📝" label="notes" value={String(stats.notesCount)} sub={stats.notesCount === 1 ? "kept" : "kept"} />
-          <StatCard icon="🎧" label="audio" value={String(stats.audioCount)} sub={fmtDuration(stats.totalDuration)} />
-          <StatCard icon="⏳" label="focus" value={String(stats.todayPoms)} sub="today" />
-          <StatCard icon="✅" label="todos" value={`${stats.todosDone}/${stats.todosTotal}`} sub="done" />
-        </div>
+        <section
+          className="su1"
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
+        >
+          <StatCard
+            icon={<NotebookPen size={18} strokeWidth={1.85} />}
+            label="notes"
+            value={String(stats.notesCount)}
+            sub="kept"
+          />
+          <StatCard
+            icon={<Headphones size={18} strokeWidth={1.85} />}
+            label="audio"
+            value={String(stats.audioCount)}
+            sub={fmtDuration(stats.totalDuration)}
+          />
+          <StatCard
+            icon={<Timer size={18} strokeWidth={1.85} />}
+            label="focus"
+            value={String(stats.todayPoms)}
+            sub="today"
+          />
+          <StatCard
+            icon={<CheckCircle2 size={18} strokeWidth={1.85} />}
+            label="todos"
+            value={`${stats.todosDone}/${stats.todosTotal}`}
+            sub="done"
+          />
+        </section>
 
-        {/* Wider rows */}
-        <div className="su2 glass-card" style={{ borderRadius: 22 }}>
+        <section className="su2 glass-card" style={{ borderRadius: 22 }}>
           <div style={{ padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
-            <span style={{ fontSize: 28 }} className="float">📔</span>
+            <IconBadge size={44} radius={14} className="float">
+              <BookOpen size={20} strokeWidth={1.85} />
+            </IconBadge>
             <div style={{ flex: 1 }}>
-              <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1.5 }}>journal</p>
-              <p style={{ margin: "2px 0 0", fontSize: 18, fontWeight: 600, color: "var(--text-secondary)", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 11,
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: 1.5,
+                }}
+              >
+                journal
+              </p>
+              <p
+                style={{
+                  margin: "2px 0 0",
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic",
+                }}
+              >
                 {stats.journalWords} {stats.journalWords === 1 ? "word" : "words"}
               </p>
             </div>
-            <span style={{ fontSize: 11, color: "var(--text-faint)" }}>your space 💜</span>
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--text-faint)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span>your space</span>
+              <HeartMark filled size={11} />
+            </span>
           </div>
-        </div>
+        </section>
 
-        <div className="su3 glass-card" style={{ borderRadius: 22 }}>
+        <section className="su3 glass-card" style={{ borderRadius: 22 }}>
           <div style={{ padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
-            <span style={{ fontSize: 28 }} className="breathe">🌷</span>
+            <IconBadge size={44} radius={14} className="breathe">
+              <Flower2 size={20} strokeWidth={1.85} />
+            </IconBadge>
             <div style={{ flex: 1 }}>
-              <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1.5 }}>moods felt</p>
-              <p style={{ margin: "2px 0 0", fontSize: 18, fontWeight: 600, color: "var(--text-secondary)", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 11,
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: 1.5,
+                }}
+              >
+                moods felt
+              </p>
+              <p
+                style={{
+                  margin: "2px 0 0",
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic",
+                }}
+              >
                 {stats.moodsCount} {stats.moodsCount === 1 ? "feeling" : "feelings"}
               </p>
             </div>
             <span style={{ fontSize: 11, color: "var(--text-faint)" }}>noticed</span>
           </div>
-        </div>
+        </section>
 
         {stats.audioCount > 0 && (
-          <div className="su4 glass-card" style={{ borderRadius: 22 }}>
+          <section className="su4 glass-card" style={{ borderRadius: 22 }}>
             <div style={{ padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
-              <span style={{ fontSize: 28 }} className="breathe2">🎵</span>
+              <IconBadge size={44} radius={14} className="breathe2">
+                <Music2 size={20} strokeWidth={1.85} />
+              </IconBadge>
               <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1.5 }}>library</p>
-                <p style={{ margin: "2px 0 0", fontSize: 18, fontWeight: 600, color: "var(--text-secondary)", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: 1.5,
+                  }}
+                >
+                  library
+                </p>
+                <p
+                  style={{
+                    margin: "2px 0 0",
+                    fontSize: 18,
+                    fontWeight: 600,
+                    color: "var(--text-secondary)",
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic",
+                  }}
+                >
                   {fmtBytes(stats.totalAudioSize)}
                 </p>
               </div>
               <span style={{ fontSize: 11, color: "var(--text-faint)" }}>saved</span>
             </div>
-          </div>
+          </section>
         )}
 
-        {/* Quote banner */}
-        <div className="su5 glass-card" style={{ borderRadius: 26 }}>
+        <section className="su5 glass-card" style={{ borderRadius: 26 }}>
           <div style={{ padding: "24px 20px", textAlign: "center" }}>
-            <p style={{ margin: 0, fontSize: 16, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", color: "var(--text-primary)", lineHeight: 1.5 }}>
-              every little thing<br />
+            <p
+              style={{
+                margin: 0,
+                fontSize: 16,
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic",
+                color: "var(--text-primary)",
+                lineHeight: 1.5,
+              }}
+            >
+              every little thing
+              <br />
               <span style={{ color: "var(--accent)", fontWeight: 600 }}>is a star already</span>
             </p>
           </div>
-        </div>
+        </section>
 
-        <p style={{ textAlign: "center", fontSize: 11, color: "var(--text-faint)", padding: "8px 0" }}>
-          made with 💜 for you
-        </p>
-      </div>
+        <footer
+          style={{
+            textAlign: "center",
+            fontSize: 11,
+            color: "var(--text-faint)",
+            padding: "8px 0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 5,
+          }}
+        >
+          <span>made with</span>
+          <HeartMark filled size={11} />
+          <span>for you</span>
+        </footer>
+      </main>
     </div>
   );
 }
 
-function StatCard({ icon, label, value, sub }: { icon: string; label: string; value: string; sub: string }) {
+function StatCard({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+}) {
   return (
-    <div className="glass-card" style={{ borderRadius: 20 }}>
-      <div style={{ padding: 14, textAlign: "center" }}>
-        <span style={{ fontSize: 22, display: "block", marginBottom: 4 }}>{icon}</span>
-        <p style={{ margin: 0, fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1.5 }}>{label}</p>
-        <p style={{ margin: "4px 0 2px", fontSize: 24, fontWeight: 600, color: "var(--text-secondary)", fontFamily: "'Cormorant Garamond', serif", lineHeight: 1 }}>
+    <article className="glass-card" style={{ borderRadius: 20 }}>
+      <div
+        style={{
+          padding: 14,
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        <IconBadge size={38} radius={12} className="mb-2">
+          {icon}
+        </IconBadge>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 10,
+            color: "var(--text-muted)",
+            textTransform: "uppercase",
+            letterSpacing: 1.5,
+          }}
+        >
+          {label}
+        </p>
+        <p
+          style={{
+            margin: "4px 0 2px",
+            fontSize: 24,
+            fontWeight: 600,
+            color: "var(--text-secondary)",
+            fontFamily: "'Cormorant Garamond', serif",
+            lineHeight: 1,
+          }}
+        >
           {value}
         </p>
         <p style={{ margin: 0, fontSize: 10, color: "var(--text-faint)" }}>{sub}</p>
       </div>
-    </div>
+    </article>
   );
 }

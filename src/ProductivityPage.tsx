@@ -1,4 +1,14 @@
 import { useState, useEffect, useRef } from "react";
+import {
+  ArrowLeft,
+  Coffee,
+  Flower2,
+  HeartMark,
+  IconBadge,
+  MoonStar,
+  Settings as SettingsIcon,
+  Timer,
+} from "./icons";
 
 type Mode = "focus" | "shortBreak" | "longBreak";
 
@@ -12,25 +22,41 @@ interface Settings {
 const DEFAULTS: Settings = {
   focus: 25,
   shortBreak: 5,
-  longBreak: 60,        // 1 hour — gives proper recovery time after a few focus cycles
+  longBreak: 60,
   cyclesBeforeLong: 4,
 };
 
 const SETTINGS_KEY = "pomodoro_settings_v2";
 
 const ls = {
-  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { void 0; } },
-  remove: (k: string) => { try { localStorage.removeItem(k); } catch { void 0; } },
+  get: (k: string) => {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set: (k: string, v: string) => {
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+      void 0;
+    }
+  },
+  remove: (k: string) => {
+    try {
+      localStorage.removeItem(k);
+    } catch {
+      void 0;
+    }
+  },
 };
 
 const loadSettings = (): Settings => {
   try {
-    // v2 (current): use stored value verbatim, only filling in any missing keys.
     const v2 = ls.get(SETTINGS_KEY);
     if (v2) return { ...DEFAULTS, ...JSON.parse(v2) };
 
-    // v1 → v2 migration: keep user customizations, but push old default longBreak (15) up to new 60.
     const v1 = ls.get("pomodoro_settings_v1");
     if (v1) {
       const parsed = { ...DEFAULTS, ...JSON.parse(v1) } as Settings;
@@ -40,7 +66,7 @@ const loadSettings = (): Settings => {
       return parsed;
     }
   } catch {
-    // fall through to defaults
+    void 0;
   }
   return DEFAULTS;
 };
@@ -67,7 +93,10 @@ const fmt = (s: number) => {
 
 const playChime = () => {
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const ctx = new (
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    )();
     const tones = [523.25, 659.25, 783.99];
     tones.forEach((freq, i) => {
       const osc = ctx.createOscillator();
@@ -98,28 +127,21 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
   const [showSettings, setShowSettings] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Ref keeps the latest handleComplete reachable from inside setInterval, so a
-  // running timer always uses fresh mode/settings/cycle/todayCount even if they
-  // change mid-session (no stale closure capture).
   const handleCompleteRef = useRef<() => void>(() => {});
 
   const totalForMode = (m: Mode, s: Settings) =>
     (m === "focus" ? s.focus : m === "shortBreak" ? s.shortBreak : s.longBreak) * 60;
 
-  // When mode or settings change while paused, snap the visible time to the new
-  // total. Skipping this while running avoids interrupting an in-flight session.
   useEffect(() => {
     if (running) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSecondsLeft(totalForMode(mode, settings));
   }, [mode, settings, running]);
 
-  // Tick loop. Only the `running` flag drives setup/teardown of the interval —
-  // any mode/settings/cycle changes flow through the ref, never re-create it.
   useEffect(() => {
     if (!running) return;
     timerRef.current = setInterval(() => {
-      setSecondsLeft(prev => {
+      setSecondsLeft((prev) => {
         if (prev <= 1) {
           if (timerRef.current) clearInterval(timerRef.current);
           handleCompleteRef.current();
@@ -143,12 +165,16 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
 
       const newCount = todayCount + 1;
       setTodayCount(newCount);
-      ls.set("pomodoro_count_v1", JSON.stringify({
-        date: new Date().toDateString(),
-        completed: newCount,
-      }));
+      ls.set(
+        "pomodoro_count_v1",
+        JSON.stringify({
+          date: new Date().toDateString(),
+          completed: newCount,
+        }),
+      );
 
-      const nextMode: Mode = newCycle % settings.cyclesBeforeLong === 0 ? "longBreak" : "shortBreak";
+      const nextMode: Mode =
+        newCycle % settings.cyclesBeforeLong === 0 ? "longBreak" : "shortBreak";
       setMode(nextMode);
       setSecondsLeft(totalForMode(nextMode, settings));
     } else {
@@ -157,12 +183,11 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
     }
   };
 
-  // Refresh the ref every render so the running timer always calls the latest version.
   useEffect(() => {
     handleCompleteRef.current = handleComplete;
   });
 
-  const toggle = () => setRunning(r => !r);
+  const toggle = () => setRunning((r) => !r);
 
   const reset = () => {
     setRunning(false);
@@ -184,10 +209,9 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
   const total = totalForMode(mode, settings);
   const pct = total > 0 ? ((total - secondsLeft) / total) * 100 : 0;
 
-  const modeLabel = mode === "focus" ? "focus time" : mode === "shortBreak" ? "short break" : "long focus";
-  const modeEmoji = mode === "focus" ? "🌷" : mode === "shortBreak" ? "🍵" : "🌙";
+  const modeLabel =
+    mode === "focus" ? "focus time" : mode === "shortBreak" ? "short break" : "long focus";
 
-  // SVG ring math
   const ringSize = 240;
   const ringStroke = 10;
   const ringRadius = (ringSize - ringStroke) / 2;
@@ -196,33 +220,67 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
 
   return (
     <div className="page-surface" style={{ paddingBottom: 96 }}>
-      <div className="px-3.5 pt-5 pb-2 flex flex-col gap-4">
-
-        {/* Header */}
-        <div className="su0 flex items-center justify-between gap-3 px-1">
+      <main className="px-3.5 pt-5 pb-2 flex flex-col gap-4 max-w-[430px] mx-auto">
+        <header className="su0 flex items-center justify-between gap-3 px-1">
           <div className="flex items-center gap-3">
             {onBack && (
-              <button onClick={onBack} aria-label="back"
-                style={{ background: "var(--bg-card-soft)", border: "1px solid var(--border-card)", borderRadius: "50%", width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: "var(--text-secondary)", flexShrink: 0 }}>←</button>
+              <button
+                onClick={onBack}
+                aria-label="back"
+                style={{
+                  background: "var(--bg-card-soft)",
+                  border: "1px solid var(--border-card)",
+                  borderRadius: "50%",
+                  width: 38,
+                  height: 38,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "var(--text-secondary)",
+                  flexShrink: 0,
+                }}
+              >
+                <ArrowLeft size={18} strokeWidth={2} />
+              </button>
             )}
-            <span className="text-[34px] breathe">⏳</span>
+            <IconBadge size={44} radius={15} className="breathe">
+              <Timer size={21} strokeWidth={1.85} />
+            </IconBadge>
             <div>
-              <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>productivity</p>
-              <h1 className="text-[26px] font-medium italic leading-tight"
-                style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)", letterSpacing: "-.4px" }}>
-                focus & flow 💜
+              <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                productivity
+              </p>
+              <h1
+                className="text-[26px] font-medium italic leading-tight inline-flex items-center gap-2"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  color: "var(--text-secondary)",
+                  letterSpacing: "-.4px",
+                }}
+              >
+                <span>focus &amp; flow</span>
+                <HeartMark filled size={15} />
               </h1>
             </div>
           </div>
-          <button onClick={() => setShowSettings(true)} aria-label="timer settings"
-            className="w-10 h-10 flex items-center justify-center text-base icon-button nav-button flex-shrink-0"
-            style={{ borderRadius: "50%", background: "var(--bg-card-soft)", border: "1px solid var(--border-card)", boxShadow: "0 2px 14px rgba(120,80,190,.08)" }}>
-            ⚙️
+          <button
+            onClick={() => setShowSettings(true)}
+            aria-label="timer settings"
+            className="w-10 h-10 flex items-center justify-center icon-button nav-button flex-shrink-0"
+            style={{
+              borderRadius: "50%",
+              background: "var(--bg-card-soft)",
+              border: "1px solid var(--border-card)",
+              color: "var(--text-secondary)",
+              boxShadow: "0 2px 14px rgba(120,80,190,.08)",
+            }}
+          >
+            <SettingsIcon size={18} strokeWidth={1.85} />
           </button>
-        </div>
+        </header>
 
-        {/* Mode switcher — animated sliding pill */}
-        <div className="su1 glass-card" style={{ borderRadius: 22 }}>
+        <nav className="su1 glass-card" style={{ borderRadius: 22 }} aria-label="Timer mode">
           <div className="mode-rail" style={{ position: "relative", padding: 6 }}>
             <div
               className="mode-pill"
@@ -230,46 +288,75 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
               style={{
                 left: `calc(6px + (100% - 12px) * ${["focus", "shortBreak", "longBreak"].indexOf(mode)} / 3)`,
                 width: "calc((100% - 12px) / 3)",
-              }} />
-            {([
-              { id: "focus", label: "focus" },
-              { id: "shortBreak", label: "short" },
-              { id: "longBreak", label: "long" },
-            ] as const).map(({ id, label }) => (
-              <button key={id} onClick={() => switchMode(id)}
+              }}
+            />
+            {(
+              [
+                { id: "focus", label: "focus" },
+                { id: "shortBreak", label: "short" },
+                { id: "longBreak", label: "long" },
+              ] as const
+            ).map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => switchMode(id)}
                 className="mode-tab"
                 style={{
                   color: mode === id ? "white" : "var(--text-muted)",
                   fontWeight: mode === id ? 700 : 600,
-                }}>
+                }}
+              >
                 {label}
               </button>
             ))}
           </div>
-        </div>
+        </nav>
 
-        {/* Timer ring */}
-        <div className="su2 glass-card" style={{ borderRadius: 28 }}>
+        <section className="su2 glass-card" style={{ borderRadius: 28 }}>
           <div className="p-6 flex flex-col items-center justify-center text-center">
-            <p className="text-[11px] uppercase tracking-[2px] mb-1" style={{ color: "var(--text-muted)" }}>
+            <p
+              className="text-[11px] uppercase tracking-[2px] mb-2"
+              style={{ color: "var(--text-muted)" }}
+            >
               {modeLabel}
             </p>
-            <span key={mode} className="text-[20px] mb-2 mode-emoji-pop">{modeEmoji}</span>
+            <span key={mode} className="mb-3 mode-emoji-pop">
+              <IconBadge size={38} radius={13}>
+                {mode === "focus" ? (
+                  <Flower2 size={18} strokeWidth={1.85} />
+                ) : mode === "shortBreak" ? (
+                  <Coffee size={18} strokeWidth={1.85} />
+                ) : (
+                  <MoonStar size={18} strokeWidth={1.85} />
+                )}
+              </IconBadge>
+            </span>
 
-            <div className={`relative timer-ring ${running ? "is-running" : ""}`} style={{ width: ringSize, height: ringSize }}>
+            <div
+              className={`relative timer-ring ${running ? "is-running" : ""}`}
+              style={{ width: ringSize, height: ringSize }}
+            >
               <svg width={ringSize} height={ringSize} style={{ transform: "rotate(-90deg)" }}>
                 <circle
-                  cx={ringSize / 2} cy={ringSize / 2} r={ringRadius}
-                  fill="none" stroke="var(--border-soft)" strokeWidth={ringStroke} />
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={ringRadius}
+                  fill="none"
+                  stroke="var(--border-soft)"
+                  strokeWidth={ringStroke}
+                />
                 <circle
-                  cx={ringSize / 2} cy={ringSize / 2} r={ringRadius}
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={ringRadius}
                   fill="none"
                   stroke="url(#purpleGrad)"
                   strokeWidth={ringStroke}
                   strokeLinecap="round"
                   strokeDasharray={ringCirc}
                   strokeDashoffset={ringOffset}
-                  style={{ transition: "stroke-dashoffset 1s linear" }} />
+                  style={{ transition: "stroke-dashoffset 1s linear" }}
+                />
                 <defs>
                   <linearGradient id="purpleGrad" x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0%" stopColor="#7654A8" />
@@ -278,8 +365,10 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
                 </defs>
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <p className="text-[52px] font-semibold leading-none tabular-nums tracking-[-2px]"
-                  style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}>
+                <p
+                  className="text-[52px] font-semibold leading-none tabular-nums tracking-[-2px]"
+                  style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}
+                >
                   {fmt(secondsLeft)}
                 </p>
                 <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)" }}>
@@ -289,65 +378,90 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
             </div>
 
             <div className="flex gap-3 mt-6">
-              <button onClick={reset}
+              <button
+                onClick={reset}
                 className="px-5 py-3 rounded-2xl text-sm font-semibold icon-button"
                 style={{
                   background: "var(--bg-input)",
                   border: "1px solid var(--border-soft)",
                   color: "var(--text-muted)",
                   cursor: "pointer",
-                }}>
+                }}
+              >
                 reset
               </button>
-              <button onClick={toggle}
-                className="px-8 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">
+              <button
+                onClick={toggle}
+                className="px-8 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press"
+              >
                 {running ? "pause" : "start"}
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Stats */}
-        <div className="su3 grid grid-cols-2 gap-3">
+        <section className="su3 grid grid-cols-2 gap-3">
           <div className="glass-card" style={{ borderRadius: 22 }}>
             <div className="p-4 text-center">
-              <p className="text-[10px] uppercase tracking-[1.5px] mb-1" style={{ color: "var(--text-muted)" }}>today</p>
-              <p className="text-[28px] font-semibold leading-none"
-                style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}>
+              <p
+                className="text-[10px] uppercase tracking-[1.5px] mb-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                today
+              </p>
+              <p
+                className="text-[28px] font-semibold leading-none"
+                style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}
+              >
                 {todayCount}
               </p>
-              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
-                {todayCount === 1 ? "session done 💜" : "sessions done 💜"}
+              <p
+                className="text-[10px] mt-1 inline-flex items-center justify-center gap-1"
+                style={{ color: "var(--text-faint)" }}
+              >
+                <span>{todayCount === 1 ? "session done" : "sessions done"}</span>
+                <HeartMark filled size={10} />
               </p>
             </div>
           </div>
           <div className="glass-card" style={{ borderRadius: 22 }}>
             <div className="p-4 text-center">
-              <p className="text-[10px] uppercase tracking-[1.5px] mb-1" style={{ color: "var(--text-muted)" }}>cycle</p>
-              <p className="text-[28px] font-semibold leading-none"
-                style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}>
-                {(cycle % settings.cyclesBeforeLong) + (mode === "focus" ? 1 : 0)}/{settings.cyclesBeforeLong}
+              <p
+                className="text-[10px] uppercase tracking-[1.5px] mb-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                cycle
               </p>
-              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>until long focus</p>
+              <p
+                className="text-[28px] font-semibold leading-none"
+                style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}
+              >
+                {(cycle % settings.cyclesBeforeLong) + (mode === "focus" ? 1 : 0)}/
+                {settings.cyclesBeforeLong}
+              </p>
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
+                until long focus
+              </p>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Soft motivation */}
-        <div className="su4 glass-card" style={{ borderRadius: 22 }}>
+        <section className="su4 glass-card" style={{ borderRadius: 22 }}>
           <div className="px-5 py-4 text-center">
-            <p className="text-[13px] italic"
-              style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
-              small progress, <span style={{ color: "var(--accent)", fontWeight: 600 }}>big change</span>
+            <p
+              className="text-[13px] italic"
+              style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}
+            >
+              small progress,{" "}
+              <span style={{ color: "var(--accent)", fontWeight: 600 }}>big change</span>
             </p>
           </div>
-        </div>
+        </section>
 
-        <p className="text-center text-[11px] py-2" style={{ color: "var(--text-faint)" }}>
+        <footer className="text-center text-[11px] py-2" style={{ color: "var(--text-faint)" }}>
           breathe in calm, breathe out doubt
-        </p>
+        </footer>
 
-        {/* Settings modal */}
         {showSettings && (
           <SettingsModal
             settings={settings}
@@ -355,7 +469,7 @@ export default function ProductivityPage({ onBack }: { onBack?: () => void } = {
             onClose={() => setShowSettings(false)}
           />
         )}
-      </div>
+      </main>
     </div>
   );
 }
@@ -372,42 +486,81 @@ function SettingsModal({
   const [draft, setDraft] = useState<Settings>(settings);
 
   const update = (k: keyof Settings, v: number) => {
-    // focus & breaks: 1–180min, cycles: 1–10
     const max = k === "cyclesBeforeLong" ? 10 : 180;
-    setDraft(d => ({ ...d, [k]: Math.max(1, Math.min(max, v)) }));
+    setDraft((d) => ({ ...d, [k]: Math.max(1, Math.min(max, v)) }));
   };
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-5 overlay-bg"
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Timer settings"
+      className="fixed inset-0 z-[300] flex items-center justify-center p-5 overlay-bg"
       style={{ background: "rgba(35,18,65,.55)", backdropFilter: "blur(14px)" }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="glass-card w-full max-w-sm page-enter" style={{ borderRadius: 28 }}>
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <article className="glass-card w-full max-w-sm page-enter" style={{ borderRadius: 28 }}>
         <div className="p-6">
-          <h3 className="text-xl font-medium italic mb-5"
-            style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}>timer settings</h3>
+          <h3
+            className="text-xl font-medium italic mb-5"
+            style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}
+          >
+            timer settings
+          </h3>
 
-          {([
-            { key: "focus", label: "focus duration", suffix: "min" },
-            { key: "shortBreak", label: "short break", suffix: "min" },
-            { key: "longBreak", label: "long focus", suffix: "min" },
-            { key: "cyclesBeforeLong", label: "cycles before long focus", suffix: "" },
-          ] as const).map(({ key, label, suffix }) => (
-            <div key={key} className="mb-4 p-3 rounded-2xl"
-              style={{ border: "1px solid var(--border-soft)", background: "var(--bg-input)" }}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--text-muted)" }}>{label}</p>
+          {(
+            [
+              { key: "focus", label: "focus duration", suffix: "min" },
+              { key: "shortBreak", label: "short break", suffix: "min" },
+              { key: "longBreak", label: "long focus", suffix: "min" },
+              { key: "cyclesBeforeLong", label: "cycles before long focus", suffix: "" },
+            ] as const
+          ).map(({ key, label, suffix }) => (
+            <div
+              key={key}
+              className="mb-4 p-3 rounded-2xl"
+              style={{ border: "1px solid var(--border-soft)", background: "var(--bg-input)" }}
+            >
+              <p
+                className="text-[10px] font-semibold uppercase tracking-widest mb-2"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {label}
+              </p>
               <div className="flex items-center gap-3">
-                <button onClick={() => update(key, draft[key] - 1)}
+                <button
+                  onClick={() => update(key, draft[key] - 1)}
                   className="w-8 h-8 rounded-full text-base icon-button"
-                  style={{ background: "var(--bg-card-soft)", border: "1px solid var(--border-soft)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                  style={{
+                    background: "var(--bg-card-soft)",
+                    border: "1px solid var(--border-soft)",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
                   −
                 </button>
-                <p className="flex-1 text-center text-[20px] font-semibold tabular-nums"
-                  style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}>
-                  {draft[key]}{suffix && <span className="text-[12px] ml-1" style={{ color: "var(--text-muted)" }}>{suffix}</span>}
+                <p
+                  className="flex-1 text-center text-[20px] font-semibold tabular-nums"
+                  style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}
+                >
+                  {draft[key]}
+                  {suffix && (
+                    <span className="text-[12px] ml-1" style={{ color: "var(--text-muted)" }}>
+                      {suffix}
+                    </span>
+                  )}
                 </p>
-                <button onClick={() => update(key, draft[key] + 1)}
+                <button
+                  onClick={() => update(key, draft[key] + 1)}
                   className="w-8 h-8 rounded-full text-base icon-button"
-                  style={{ background: "var(--bg-card-soft)", border: "1px solid var(--border-soft)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                  style={{
+                    background: "var(--bg-card-soft)",
+                    border: "1px solid var(--border-soft)",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
                   +
                 </button>
               </div>
@@ -415,18 +568,27 @@ function SettingsModal({
           ))}
 
           <div className="flex gap-2 mt-2">
-            <button onClick={onClose}
+            <button
+              onClick={onClose}
               className="flex-1 py-3 rounded-2xl text-sm icon-button"
-              style={{ border: "1px solid var(--border-soft)", color: "var(--text-muted)", background: "transparent", cursor: "pointer" }}>
+              style={{
+                border: "1px solid var(--border-soft)",
+                color: "var(--text-muted)",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+            >
               cancel
             </button>
-            <button onClick={() => onSave(draft)}
-              className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press">
+            <button
+              onClick={() => onSave(draft)}
+              className="flex-1 py-3 rounded-2xl text-sm font-semibold btn-purple shimmer-press"
+            >
               save
             </button>
           </div>
         </div>
-      </div>
+      </article>
     </div>
   );
 }

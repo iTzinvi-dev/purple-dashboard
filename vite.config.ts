@@ -4,6 +4,11 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  server: {
+    host: '0.0.0.0',
+    port: 3000,
+    allowedHosts: true,
+  },
   build: {
     // Faster repeat-loads: long-cacheable vendor chunk so app updates don't bust React.
     rollupOptions: {
@@ -36,7 +41,7 @@ export default defineConfig({
         'icon.svg',
       ],
       manifest: {
-        name: 'My Purple Space 💜',
+        name: 'My Purple Space',
         short_name: 'Purple',
         description: 'A soft, dreamy space to journal, track your day, and find a little quiet.',
         theme_color: '#C8B4E3',
