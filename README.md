@@ -71,5 +71,4 @@ export default defineConfig([
   },
 ])
 ```
-# purple-dashboard
-# purple-dashboard
+# purple-dashboard is A project crafted from the heart, dedicated to my beloved soul.
